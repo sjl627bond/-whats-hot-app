@@ -1,0 +1,38 @@
+(function initialiseMap(windowObject, documentObject) {
+  'use strict';
+  let map = null; let venueLayer = null; let userMarker = null; let onSelect = null;
+  const centers = windowObject.GOHOTT_CONFIG.cityCenters;
+
+  function ensureMap() {
+    if (map || !windowObject.L) return map;
+    map = windowObject.L.map('map', { zoomControl: false }).setView(centers.Sarasota, 13);
+    windowObject.L.control.zoom({ position: 'topright' }).addTo(map);
+    windowObject.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+    venueLayer = windowObject.L.layerGroup().addTo(map);
+    return map;
+  }
+  function scoreColor(score) { return score >= 85 ? '#ff5315' : score >= 70 ? '#ff9a69' : '#f1b45a'; }
+  function render({ venues, city, position, selectVenue }) {
+    onSelect = selectVenue; const instance = ensureMap();
+    const message = documentObject.querySelector('#map-message');
+    if (!instance) { message.textContent = 'The interactive map could not load. Venue discovery is still available.'; return; }
+    venueLayer.clearLayers(); instance.setView(centers[city], city === 'Sarasota' ? 13 : 12);
+    const mappable = venues.filter((venue) => venue.latitude !== null && venue.latitude !== '' && venue.longitude !== null && venue.longitude !== '' && Number.isFinite(Number(venue.latitude)) && Number.isFinite(Number(venue.longitude)));
+    mappable.forEach((venue) => {
+      const marker = windowObject.L.circleMarker([Number(venue.latitude), Number(venue.longitude)], { radius: 13, color: '#09090b', weight: 3, fillColor: scoreColor(venue.live_score), fillOpacity: 1 });
+      marker.bindTooltip(String(venue.live_score), { permanent: true, direction: 'center', className: 'score-tooltip' });
+      marker.on('click', () => onSelect?.(venue)); marker.addTo(venueLayer);
+    });
+    message.textContent = mappable.length ? `${mappable.length} live venues mapped.` : 'Venue coordinates are not available yet. The map is ready and markers will appear as verified coordinates are added.';
+    if (position) setUserPosition(position);
+    setTimeout(() => instance.invalidateSize(), 0);
+  }
+  function setUserPosition(position) {
+    const instance = ensureMap(); if (!instance || !position) return;
+    if (userMarker) userMarker.remove();
+    userMarker = windowObject.L.circleMarker([position.latitude, position.longitude], { radius: 8, color: '#fff', weight: 3, fillColor: '#3b82f6', fillOpacity: 1 }).addTo(instance).bindTooltip('You are here');
+  }
+  windowObject.GoHottMap = Object.freeze({ render, setUserPosition });
+}(window, document));

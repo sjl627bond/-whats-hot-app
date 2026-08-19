@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090b">
-  <meta name="description" content="Discover where the night is hottest with live crowd reports in Sarasota and Tampa Bay.">
+  <meta name="description" content="Find the best place to go right now with live nightlife reports in Sarasota and Tampa Bay.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GoHott">
@@ -12,70 +12,97 @@
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
   <link rel="stylesheet" href="styles.css">
-  <title>GoHott — Live nightlife</title>
+  <title>GoHott — Where to go right now</title>
 </head>
 <body>
   <div class="app">
     <header class="app-header">
-      <a class="brand" href="#discover" aria-label="GoHott home">GO<span>HOTT</span></a>
-      <div class="live-pill"><span aria-hidden="true"></span> Live</div>
+      <a class="brand" href="#discover" data-route="discover" aria-label="GoHott home">GO<span>HOTT</span></a>
+      <div class="header-actions">
+        <button class="icon-button location-button" type="button" data-location aria-label="Use my location" title="Use my location">⌖</button>
+        <button class="account-chip" type="button" data-account><span class="avatar-mini">●</span><span data-account-label>Sign in</span></button>
+      </div>
     </header>
+
     <main>
-      <section class="screen is-active" id="discover-screen" data-screen="discover">
+      <section class="screen" data-screen="discover">
         <div class="hero">
-          <div class="city-switcher" role="group" aria-label="Choose a city">
-            <button class="city-button is-active" type="button" data-city="Sarasota" aria-pressed="true">Sarasota</button>
-            <button class="city-button" type="button" data-city="Tampa Bay" aria-pressed="false">Tampa Bay</button>
+          <div class="hero-top">
+            <div class="city-switcher" role="group" aria-label="Choose a city">
+              <button class="city-button is-active" type="button" data-city="Sarasota" aria-pressed="true">Sarasota</button>
+              <button class="city-button" type="button" data-city="Tampa Bay" aria-pressed="false">Tampa Bay</button>
+            </div>
+            <span class="live-pill"><i></i> Live</span>
           </div>
-          <p class="eyebrow" id="city-label">SARASOTA · LIVE NIGHTLIFE</p>
-          <h1>Find the energy.<br>Join the night.</h1>
-          <p class="hero-copy">Live venue rankings shaped by recent crowd reports.</p>
+          <p class="eyebrow" id="city-label">SARASOTA · TONIGHT</p>
+          <h1>Know where<br>to go <em>now.</em></h1>
+          <p class="hero-copy">Live rankings from the people already there.</p>
         </div>
         <section class="venue-section" aria-labelledby="trending-heading">
-          <div class="section-heading">
-            <div><p class="eyebrow">TONIGHT'S PULSE</p><h2 id="trending-heading">Trending now</h2></div>
-            <span class="freshness" id="fresh" role="status">Connecting…</span>
-          </div>
+          <div class="section-heading"><div><p class="eyebrow">THE HOTT LIST</p><h2 id="trending-heading">Trending now</h2></div><span class="freshness" id="fresh" role="status">Connecting…</span></div>
+          <div class="notice" id="location-notice" hidden></div>
           <div id="error-region" aria-live="polite"></div>
-          <div id="venue-cards" aria-live="polite"><div class="loading">Loading live venues…</div></div>
-          <button class="primary-cta" id="report-top" type="button">＋ Check in &amp; report the vibe</button>
+          <div id="venue-cards" aria-live="polite"><div class="loading"><span></span>Finding the energy…</div></div>
         </section>
       </section>
-      <section class="screen placeholder-screen" id="map-screen" data-screen="map" hidden>
-        <div class="placeholder-icon" aria-hidden="true">⌖</div><p class="eyebrow">COMING IN PHASE 2</p><h1>Nightlife, mapped.</h1><p>Explore nearby venues and live heat across the city.</p>
+
+      <section class="screen map-screen" data-screen="map" hidden>
+        <div class="screen-title"><div><p class="eyebrow">EXPLORE</p><h1>Tonight, mapped.</h1></div><button class="secondary-button" type="button" data-location>⌖ Locate me</button></div>
+        <div id="map" aria-label="Interactive nightlife map"></div>
+        <div class="map-message" id="map-message" role="status"></div>
+        <div class="map-preview" id="map-preview" hidden></div>
       </section>
-      <section class="screen placeholder-screen" id="saved-screen" data-screen="saved" hidden>
-        <div class="placeholder-icon" aria-hidden="true">♡</div><p class="eyebrow">COMING IN PHASE 2</p><h1>Your shortlist.</h1><p>Save the spots you want to watch before heading out.</p>
+
+      <section class="screen content-screen" data-screen="saved" hidden>
+        <div class="screen-title"><div><p class="eyebrow">YOUR SHORTLIST</p><h1>Saved venues.</h1></div></div>
+        <div id="saved-content"><div class="loading"><span></span>Loading saves…</div></div>
       </section>
-      <section class="screen placeholder-screen" id="profile-screen" data-screen="profile" hidden>
-        <div class="placeholder-icon" aria-hidden="true">◉</div><p class="eyebrow">COMING IN PHASE 2</p><h1>Your night, your way.</h1><p>Profiles and personalized recommendations are on the roadmap.</p>
+
+      <section class="screen content-screen" data-screen="profile" hidden>
+        <div class="screen-title"><div><p class="eyebrow">YOUR GOHOTT</p><h1>Profile.</h1></div></div>
+        <div id="profile-content"></div>
+      </section>
+
+      <section class="screen detail-screen" data-screen="venue" hidden>
+        <button class="back-button" type="button" data-back>← Back</button>
+        <div id="venue-detail"></div>
       </section>
     </main>
+
     <nav class="bottom-nav" aria-label="Primary navigation">
-      <button class="nav-item is-active" type="button" data-target="discover" aria-current="page"><span aria-hidden="true">⌁</span>Discover</button>
-      <button class="nav-item" type="button" data-target="map"><span aria-hidden="true">⌖</span>Map</button>
-      <button class="nav-item" type="button" data-target="saved"><span aria-hidden="true">♡</span>Saved</button>
-      <button class="nav-item" type="button" data-target="profile"><span aria-hidden="true">◉</span>Profile</button>
+      <button class="nav-item is-active" type="button" data-route="discover"><span aria-hidden="true">⌁</span>Discover</button>
+      <button class="nav-item" type="button" data-route="map"><span aria-hidden="true">⌖</span>Map</button>
+      <button class="nav-item" type="button" data-route="saved"><span aria-hidden="true">♡</span>Saved</button>
+      <button class="nav-item" type="button" data-route="profile"><span aria-hidden="true">◉</span>Profile</button>
     </nav>
   </div>
+
   <div class="modal" id="check-in-modal" role="dialog" aria-modal="true" aria-labelledby="check-in-title" hidden>
     <button class="modal-backdrop" type="button" data-close-modal aria-label="Close check-in"></button>
-    <div class="sheet">
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <button class="close-button" type="button" data-close-modal aria-label="Close">×</button>
+    <div class="sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-modal aria-label="Close">×</button>
       <p class="eyebrow">LIVE CROWD REPORT</p><h2 id="check-in-title">How's the vibe?</h2>
-      <p class="sheet-copy">Your report updates the live score for everyone.</p>
+      <p class="sheet-copy">Reports are freshest when you're at the venue.</p>
+      <div class="trust-status" id="trust-status">Checking location availability…</div>
       <div class="vote-grid">
-        <button type="button" data-level="5" data-vibe="GOING OFF"><span>🔥</span>Going off</button>
-        <button type="button" data-level="4" data-vibe="BUSY"><span>⚡</span>Pretty busy</button>
-        <button type="button" data-level="2" data-vibe="CHILL"><span>🌙</span>Chill</button>
-        <button type="button" data-level="1" data-vibe="DEAD"><span>💤</span>Dead</button>
-      </div>
-      <p class="form-message" id="form-message" role="status"></p>
+        <button type="button" data-level="5" data-vibe="GOING OFF"><span>🔥</span>Going off</button><button type="button" data-level="4" data-vibe="BUSY"><span>⚡</span>Pretty busy</button>
+        <button type="button" data-level="2" data-vibe="CHILL"><span>🌙</span>Chill</button><button type="button" data-level="1" data-vibe="DEAD"><span>💤</span>Dead</button>
+      </div><p class="form-message" id="check-in-message" role="status"></p>
     </div>
   </div>
+
+  <div class="modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
+    <button class="modal-backdrop" type="button" data-close-auth aria-label="Close sign in"></button>
+    <div class="sheet auth-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-auth aria-label="Close">×</button>
+      <p class="eyebrow">WELCOME TO GOHOTT</p><h2 id="auth-title">Sign in</h2><p class="sheet-copy">Save venues, build a profile, and make trusted reports.</p>
+      <form id="auth-form"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" minlength="6" autocomplete="current-password" required></label><button class="primary-button" type="submit">Sign in</button></form>
+      <button class="text-button" type="button" data-toggle-auth>Create an account instead</button><p class="form-message" id="auth-message" role="status"></p>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
-  <script src="config.js"></script><script src="supabase.js"></script><script src="app.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+  <script src="config.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="map.js"></script><script src="app.js"></script>
 </body>
 </html>

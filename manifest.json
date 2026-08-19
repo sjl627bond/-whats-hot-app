@@ -1,7 +1,7 @@
 {
   "name": "GoHott — Live Nightlife",
   "short_name": "GoHott",
-  "description": "Discover where the night is hottest with live crowd reports.",
+  "description": "Find the best place to go right now with live nightlife reports.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

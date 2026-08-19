@@ -1,5 +1,5 @@
-const CACHE_NAME = 'gohott-shell-v1';
-const APP_SHELL = ['./', './index.html', './styles.css', './config.js', './supabase.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE_NAME = 'gohott-shell-v2';
+const APP_SHELL = ['./', './index.html', './styles.css', './config.js', './supabase.js', './auth.js', './geo.js', './map.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
@@ -8,6 +8,7 @@ self.addEventListener('activate', (event) => {
 });
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
+  // Network-first keeps releases fresh; the cache is only a resilient fallback.
   event.respondWith(fetch(event.request).then((response) => {
     const copy = response.clone(); caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)); return response;
   }).catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html'))));
