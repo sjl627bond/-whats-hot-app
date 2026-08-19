@@ -14,6 +14,8 @@ assert.match(migration, /moderation_state='approved'.*expires_at>now\(\)/s);
 assert.match(migration, /p_accuracy_meters>250/);
 assert.match(migration, /v_distance>500/);
 assert.match(migration, /auth\.sessions/);
+assert.match(migration, /v_expected_extension := case p_content_type[\s\S]+p_extension is distinct from v_expected_extension/i);
+assert.doesNotMatch(migration, /if\s+p_extension\s*<>\s*case/i, 'avoid ambiguous inline CASE syntax in PL/pgSQL IF');
 assert.match(migration, /v_count>=3.*pending_review/s);
 assert.match(migration, /expires_at timestamptz not null default \(now\(\) \+ interval '24 hours'\)/);
 assert.doesNotMatch(browser, /(service[_-]?role|supabase_service|secret_key)/i);

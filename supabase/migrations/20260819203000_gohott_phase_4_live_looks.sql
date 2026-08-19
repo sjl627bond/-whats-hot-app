@@ -120,20 +120,90 @@ end; $$;
 
 create or replace function public.prepare_live_look_upload(p_venue_id uuid,p_content_type text,p_byte_size integer,p_extension text,p_content_hash text)
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare v_user uuid:=auth.uid(); v_id uuid:=gen_random_uuid(); v_path text;
+declare
+  v_user uuid := auth.uid();
+  v_id uuid := gen_random_uuid();
+  v_path text;
+  v_expected_extension text;
 begin
-  if v_user is null then raise exception using errcode='42501',message='Sign in to add a Live Look.'; end if;
-  if not exists(select 1 from auth.sessions s where s.user_id=v_user and s.id::text=auth.jwt()->>'session_id') then raise exception using errcode='42501',message='Your session is no longer active.'; end if;
-  if not exists(select 1 from public.venues where id=p_venue_id) then raise exception using errcode='23503',message='Venue not found.'; end if;
-  if p_content_type not in ('image/jpeg','image/png','image/webp','image/heic','image/heif') or p_byte_size not between 1 and 8388608 or p_content_hash !~ '^[a-f0-9]{64}$' then raise exception using errcode='22023',message='Invalid image.'; end if;
-  if p_extension <> case p_content_type when 'image/jpeg' then 'jpg' when 'image/png' then 'png' when 'image/webp' then 'webp' when 'image/heic' then 'heic' when 'image/heif' then 'heif' end then raise exception using errcode='22023',message='Invalid image extension.'; end if;
-  perform pg_advisory_xact_lock(hashtextextended(v_user::text,4));
-  if (select count(*) from public.live_looks where user_id=v_user and created_at>now()-interval '1 hour')>=8 then raise exception using errcode='P0001',message='Live Look limit reached. Try again later.'; end if;
-  if exists(select 1 from public.live_looks where user_id=v_user and venue_id=p_venue_id and created_at>now()-interval '5 minutes') then raise exception using errcode='P0001',message='Wait five minutes before adding another Live Look here.'; end if;
-  if exists(select 1 from public.live_looks where user_id=v_user and content_hash=p_content_hash and created_at>now()-interval '24 hours') then raise exception using errcode='P0001',message='That photo was already submitted.'; end if;
-  v_path:=v_user::text||'/'||v_id::text||'/original.'||p_extension;
-  insert into public.live_looks(id,venue_id,user_id,storage_path,duration_choice,content_type,byte_size,content_hash) values(v_id,p_venue_id,v_user,v_path,'60_minutes',p_content_type,p_byte_size,p_content_hash);
-  return jsonb_build_object('id',v_id,'path',v_path);
+  if v_user is null then
+    raise exception using errcode = '42501', message = 'Sign in to add a Live Look.';
+  end if;
+
+  if not exists (
+    select 1
+    from auth.sessions s
+    where s.user_id = v_user
+      and s.id::text = auth.jwt() ->> 'session_id'
+  ) then
+    raise exception using errcode = '42501', message = 'Your session is no longer active.';
+  end if;
+
+  if not exists (select 1 from public.venues where id = p_venue_id) then
+    raise exception using errcode = '23503', message = 'Venue not found.';
+  end if;
+
+  if p_content_type not in ('image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif')
+    or p_byte_size not between 1 and 8388608
+    or p_content_hash !~ '^[a-f0-9]{64}$' then
+    raise exception using errcode = '22023', message = 'Invalid image.';
+  end if;
+
+  v_expected_extension := case p_content_type
+    when 'image/jpeg' then 'jpg'
+    when 'image/png' then 'png'
+    when 'image/webp' then 'webp'
+    when 'image/heic' then 'heic'
+    when 'image/heif' then 'heif'
+    else null
+  end;
+
+  if v_expected_extension is null or p_extension is distinct from v_expected_extension then
+    raise exception using errcode = '22023', message = 'Invalid image extension.';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(v_user::text, 4));
+
+  if (
+    select count(*)
+    from public.live_looks
+    where user_id = v_user
+      and created_at > now() - interval '1 hour'
+  ) >= 8 then
+    raise exception using errcode = 'P0001', message = 'Live Look limit reached. Try again later.';
+  end if;
+
+  if exists (
+    select 1
+    from public.live_looks
+    where user_id = v_user
+      and venue_id = p_venue_id
+      and created_at > now() - interval '5 minutes'
+  ) then
+    raise exception using errcode = 'P0001', message = 'Wait five minutes before adding another Live Look here.';
+  end if;
+
+  if exists (
+    select 1
+    from public.live_looks
+    where user_id = v_user
+      and content_hash = p_content_hash
+      and created_at > now() - interval '24 hours'
+  ) then
+    raise exception using errcode = 'P0001', message = 'That photo was already submitted.';
+  end if;
+
+  v_path := v_user::text || '/' || v_id::text || '/original.' || p_extension;
+
+  insert into public.live_looks (
+    id, venue_id, user_id, storage_path, duration_choice,
+    content_type, byte_size, content_hash
+  ) values (
+    v_id, p_venue_id, v_user, v_path, '60_minutes',
+    p_content_type, p_byte_size, p_content_hash
+  );
+
+  return jsonb_build_object('id', v_id, 'path', v_path);
 end; $$;
 
 create or replace function public.publish_live_look(p_live_look_id uuid,p_caption text,p_duration_choice text,p_latitude double precision,p_longitude double precision,p_accuracy_meters integer)
