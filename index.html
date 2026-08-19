@@ -24,8 +24,16 @@ header{padding:18px;display:flex;justify-content:space-between;align-items:cente
 <body>
 <div class="app">
 <header><div class="brand">WHAT'S <span>HOT</span></div><div class="pill">● LIVE BETA</div></header>
-<div class="hero"><small>TAMPA BAY</small><h1>Where should we go tonight?</h1><p>Live venue data powered by crowd reports.</p></div>
-<div class="section">
+<div class="hero">
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <button onclick="setCity('Sarasota')" id="btn-sarasota" style="border:0;border-radius:18px;padding:8px 12px;background:#ff5200;color:white;font-weight:800">Sarasota</button>
+    <button onclick="setCity('Tampa Bay')" id="btn-tampa" style="border:0;border-radius:18px;padding:8px 12px;background:#222;color:#aaa;font-weight:800">Tampa Bay</button>
+  </div>
+  <small id="city-label">SARASOTA</small>
+  <h1>Where should we go tonight?</h1>
+  <p>Live venue data powered by crowd reports.</p>
+</div>
+ <div class="section">
 <div class="head"><b>🔥 Trending now</b><span id="fresh">CONNECTING…</span></div>
 <div id="err"></div><div id="cards"><div class="loading">Loading live venues…</div></div>
 <button class="cta" onclick="openTop()">＋ Check in & report the vibe</button>
@@ -37,9 +45,30 @@ header{padding:18px;display:flex;justify-content:space-between;align-items:cente
 const SUPABASE_URL="https://vllqnjteydpxibzsxxvv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY="sb_publishable_fv2e2n6hjEf4JOv4T9eFNA_RICo7FtZ";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let venues=[],currentVenue=null;
-function err(m){document.getElementById('err').innerHTML='<div class="error">'+m+'</div>'}
-async function loadVenues(){
+let venues=[],currentVenue=null,currentCity='Sarasota';
+function setCity(city){
+  currentCity=city;
+
+  document.getElementById('city-label').textContent =
+    city==='Sarasota' ? 'SARASOTA' : 'TAMPA BAY';
+
+  const sarasotaBtn=document.getElementById('btn-sarasota');
+  const tampaBtn=document.getElementById('btn-tampa');
+
+  if(city==='Sarasota'){
+    sarasotaBtn.style.background='#ff5200';
+    sarasotaBtn.style.color='white';
+    tampaBtn.style.background='#222';
+    tampaBtn.style.color='#aaa';
+  } else {
+    tampaBtn.style.background='#ff5200';
+    tampaBtn.style.color='white';
+    sarasotaBtn.style.background='#222';
+    sarasotaBtn.style.color='#aaa';
+  }
+
+  render();
+}async function loadVenues(){
  document.getElementById('fresh').textContent='UPDATING…';
  const {data:vs,error:e1}=await sb.from('venues').select('*');
  if(e1){err('Could not load venues: '+e1.message);return}
@@ -58,10 +87,36 @@ async function loadVenues(){
  render();document.getElementById('fresh').textContent='LIVE NOW';
 }
 function render(){
- document.getElementById('cards').innerHTML=venues.map((v,i)=>`<div class="card" onclick="openM('${v.id}')"><div class="rank">#${i+1}</div><div class="info"><b>${v.name}</b><span>${v.area||''} · ${v.scene||'Nightlife'}</span><em>● ${v.live_status}${v.line_note?' · '+v.line_note:''}</em></div><div class="score">${v.live_score}<small>HOT</small></div></div>`).join('');
+  const cityVenues=venues.filter(v=>{
+    if(currentCity==='Sarasota'){
+      return v.area==='Sarasota';
+    }
+    return v.area!=='Sarasota';
+  });
+
+  document.getElementById('cards').innerHTML=cityVenues.map((v,i)=>`
+    <div class="card" onclick="openM('${v.id}')">
+      <div class="rank">#${i+1}</div>
+      <div class="info">
+        <b>${v.name}</b>
+        <span>${v.area||''} · ${v.scene||'Nightlife'}</span>
+        <em>● ${v.live_status}${v.line_note?' · '+v.line_note:''}</em>
+      </div>
+      <div class="score">${v.live_score}<small>HOT</small></div>
+    </div>
+  `).join('');
 }
-function openTop(){if(venues.length)openM(venues[0].id)}
-function openM(id){currentVenue=venues.find(v=>v.id===id);if(!currentVenue)return;document.getElementById('checkTitle').textContent=currentVenue.name;document.getElementById('modal').style.display='flex'}
+
+function openTop(){
+  const cityVenues=venues.filter(v=>
+    currentCity==='Sarasota'
+      ? v.area==='Sarasota'
+      : v.area!=='Sarasota'
+  );
+
+  if(cityVenues.length) openM(cityVenues[0].id);
+ }
+ }function openM(id){currentVenue=venues.find(v=>v.id===id);if(!currentVenue)return;document.getElementById('checkTitle').textContent=currentVenue.name;document.getElementById('modal').style.display='flex'}
 function closeM(){document.getElementById('modal').style.display='none'}
 async function vote(level,vibe){
  const {error}=await sb.from('check_ins').insert({venue_id:currentVenue.id,crowd_level:level,vibe});
