@@ -1,73 +1,110 @@
 # GoHott
 
-GoHott is a mobile-first nightlife discovery PWA for finding the busiest venues in Sarasota and Tampa Bay. It ranks venues using their stored baseline hot score plus crowd reports submitted during the previous two hours.
+GoHott answers one question: **Where should we go right now?** It is a mobile-first nightlife discovery PWA combining live crowd reports, venue popularity, location, saved places, and trusted user activity for Sarasota and Tampa Bay.
 
-## Phase 1
+## Current product
 
-- Live venue discovery and ranking for Sarasota and Tampa Bay
-- Crowd check-ins with four vibe levels
-- Supabase Postgres reads, inserts, and realtime check-in updates
-- Installable, offline-capable PWA shell
-- Responsive nightlife-focused interface
-- Product navigation foundation for Discover, Map, Saved, and Profile
+Phase 1 established the GoHott brand, live Supabase venue ranking, city switching, crowd reports, realtime refreshes, and an installable static PWA. Phase 2 adds:
 
-Map, Saved, and Profile are honest Phase 2 placeholders; they do not simulate unavailable functionality.
+- Persistent Supabase email/password authentication without blocking guest browsing
+- User profiles, saved venues, and personal check-in history
+- Location-aware distance display and explicitly client-assessed proximity metadata
+- Repeated-report protection for authenticated users
+- Interactive Leaflet/OpenStreetMap experience with automatic venue markers when verified coordinates exist
+- Reusable venue detail screens with live status, score, line note, recent reports, Save, and Report actions
+- Functional Discover, Map, Saved, and Profile navigation
 
 ## Architecture
 
-This is a dependency-light static web application that remains compatible with Vercel static hosting.
+GoHott remains a dependency-light static application compatible with Vercel.
 
 | File | Responsibility |
 | --- | --- |
-| `index.html` | Accessible app shell, metadata, screens, and modal markup |
-| `styles.css` | Mobile-first visual system and responsive layout |
-| `config.js` | Browser-safe runtime configuration |
-| `supabase.js` | Supabase client, queries, mutations, and realtime subscription |
-| `app.js` | UI state, hot-score calculation, rendering, navigation, and interactions |
-| `manifest.json` | PWA identity and install metadata |
-| `sw.js` | App-shell caching and offline fallback |
+| `index.html` | App shell, accessible screens, navigation, and modal forms |
+| `styles.css` | Mobile-first visual system and responsive components |
+| `config.js` | Browser-safe configuration, city centers, and proximity thresholds |
+| `supabase.js` | Data queries, mutations, realtime, profiles, and saves |
+| `auth.js` | Persistent session, sign-up, sign-in, sign-out, and auth state |
+| `geo.js` | Permission-based geolocation, distance, and proximity assessment |
+| `map.js` | Leaflet map, OpenStreetMap tiles, venue markers, and user position |
+| `app.js` | Product state, scoring, navigation, views, and interaction orchestration |
+| `sw.js` | Versioned network-first app-shell cache |
+| `supabase/migrations/` | Additive database schema, grants, and RLS policies |
 
-The frontend reads `venues`, loads `check_ins` from the preceding two hours, calculates a capped adjustment from `crowd_level`, and sorts the resulting `live_score`. It subscribes to inserts on `public.check_ins` and refreshes the ranking when a report arrives.
+No framework or build step is required.
 
 ## Local development
 
-Serve the repository root over HTTP; service workers do not work reliably from `file://` URLs.
+Serve the repository root over HTTP:
 
 ```sh
 python3 -m http.server 8080
 ```
 
-Then open `http://localhost:8080`. No build step is required.
+Open `http://localhost:8080`. Geolocation works on localhost and HTTPS deployments. The map and Supabase client libraries load from pinned CDNs, so an internet connection is required for first use.
 
-## Supabase dependency and security
+## Supabase
 
-`config.js` contains the Supabase project URL and a publishable key. Both are intentionally visible in a browser application and are not secrets. Never add a `service_role` key, secret key, database password, or private credential to this repository.
+The frontend depends on:
 
-Production security must be enforced in Supabase:
+- `venues`: public venue discovery data, including nullable `latitude` and `longitude`
+- `check_ins`: live crowd reports
+- `profiles`: private per-user profile data added by Phase 2
+- `saved_venues`: private user-to-venue relationships added by Phase 2
+- Supabase Auth with email/password enabled
+- Realtime publication for `check_ins`
 
-- Enable RLS on every exposed table, including `public.venues` and `public.check_ins`.
-- Allow `anon` only the minimum operations needed: venue reads, recent check-in reads, and constrained check-in inserts.
-- Validate inserts with a restrictive `WITH CHECK` policy and database constraints for allowed `crowd_level`/`vibe` values, valid venue IDs, and server-controlled timestamps.
-- Add abuse controls (authentication, rate limiting, or a validated server endpoint) before broad production launch; a public insert policy alone cannot prevent spam.
-- Keep `check_ins` free of sensitive personal data while anonymous reads are supported.
-- Confirm `check_ins` is in the `supabase_realtime` publication and review Realtime authorization.
+`config.js` contains a Supabase project URL and publishable key. These are browser-safe identifiers, not secrets. Never commit service-role/secret keys, passwords, database connection strings, or access tokens.
 
-No database schema or production data is changed by this Phase 1 branch.
+### Phase 2 migration
 
-## Deployment
+Review and apply `supabase/migrations/20260819161930_gohott_phase_2.sql` using the normal Supabase migration workflow. It is additive: it creates `profiles` and `saved_venues`, adds identity and client-assessed proximity metadata to `check_ins`, creates indexes, grants minimum table privileges, enables RLS, and adds ownership policies. It does not delete or rewrite venue/check-in rows.
 
-Deploy the repository root as a static Vercel project with no framework preset and no build command. The output directory is the repository root. All app-shell paths are relative, so preview and production deployments remain portable.
+Before production application, inspect existing `venues` and `check_ins` policies. PostgreSQL ORs permissive policies, so the migration adds a restrictive INSERT guard that is ANDed with the existing permissive check-in policy. It prevents identity spoofing and requires anonymous compatibility reports to use `proximity_status = 'unassessed'` with no distance.
 
-After deployment, verify the Supabase project's allowed origins/configuration, live reads and inserts, realtime delivery, service-worker registration, and installation on iOS and Android.
+## Authentication and authorization
 
-## Phase 2 roadmap
+Visitors can browse, view maps/details, and submit compatibility crowd reports without an account. Authentication is required for Saved and Profile. Authenticated check-ins attach the signed-in user ID and are checked against RLS ownership.
 
-- Real map view with venue coordinates and heat visualization
-- Authentication, profiles, and trusted check-in identity
-- Saved venues and personalized recommendations
-- Venue detail pages, operating hours, media, and directions
-- Server-side anti-abuse controls and hardened RLS/database constraints
-- Location-aware discovery and city modeling that does not infer Tampa Bay from “not Sarasota”
-- Automated unit, integration, accessibility, and browser tests
-- Realtime Broadcast evaluation for higher concurrent traffic
-- Observability, analytics, moderation, and production incident tooling
+Required RLS model:
+
+- `venues`: public read; no public writes
+- `check_ins`: public read; anonymous inserts require `user_id is null`; authenticated inserts require `user_id = auth.uid()`
+- `profiles`: authenticated users can select, insert, and update only `id = auth.uid()`
+- `saved_venues`: authenticated users can select, insert, and delete only `user_id = auth.uid()`
+
+`proximity_status = 'client_nearby'` means only that a signed-in browser calculated a distance within the configured radius. It is advisory, user-controlled evidence—not cryptographic proof or server verification. Anonymous reports never submit or display that label. A future server-owned field and trusted function should validate location and incorporate device/account abuse signals before any report is called verified.
+
+## Location and map behavior
+
+Location is optional and only requested after a user action. If granted, GoHott calculates distance locally for venues with coordinates and shows the user on the map. If denied or unavailable, city-based discovery remains fully functional.
+
+Leaflet uses OpenStreetMap's standard public tiles with required attribution and no billable API key. All current production venue coordinates were null during Phase 2 development, so the map truthfully shows an empty marker state. Markers and distance appear automatically when legitimate coordinates are populated; the application never invents venue locations.
+
+## Scoring
+
+The Phase 1 algorithm is preserved: each venue starts with `hot_score` (default 50), reports from the previous two hours adjust it (`+3` Going Off, `+2` Pretty Busy, `-1` Chill, `-3` Dead), the adjustment is capped at ±15, and the final score is clamped from 0–100. Phase 2 records verification metadata but does not change report weighting yet.
+
+## Deployment and PWA
+
+Deploy the repository root to Vercel as a static site with no build command. The manifest, icons, standalone metadata, relative paths, safe-area layout, and service worker are production-ready. The service worker uses a versioned, network-first strategy so new releases are not trapped behind stale cached code.
+
+After deploying, add the production and preview URLs to Supabase Auth redirect/site URL configuration, verify email templates, and test sign-up confirmation links.
+
+## Known limitations
+
+- The Phase 2 migration must be applied before profiles, saves, and identity metadata persist.
+- Existing venues need legitimate coordinates before venue markers/distances can render.
+- Email confirmation depends on Supabase Auth project mail settings.
+- Guest check-ins remain for backward compatibility and are untrusted.
+- Proximity assessment and repeat throttling are client-assisted; robust anti-abuse enforcement needs server-side validation.
+- Public OpenStreetMap tiles are suitable for current light traffic; a production-scale tile strategy must follow the provider usage policy.
+
+## Phase 3 priorities
+
+1. Curate verified venue coordinates, addresses, hours, media, and data provenance.
+2. Add server-owned check-in validation, rate limiting, moderation, and trust weighting; only then introduce verified terminology.
+3. Add Google/Apple Auth after provider and redirect configuration.
+4. Add automated unit, browser, accessibility, and migration integration tests.
+5. Add observability, privacy controls, account deletion/export, analytics, and incident tooling.
+6. Evaluate a dedicated tile provider and Supabase Realtime Broadcast as traffic grows.
