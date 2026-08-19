@@ -2,6 +2,7 @@
   'use strict';
   const state = { venues: [], checkIns: [], markets: [], liveLooks: [], liveLooksAvailable: false, selectedLiveLookFile: null, savedIds: new Set(), profile: null, socialTab: 'people', people: [], conversations: [], activeConversation: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle' };
   let lastFocusedElement = null;
+  let unsubscribeSocial = null;
   const el = (selector) => documentObject.querySelector(selector);
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
   function safeHttpsUrl(value) { try { const url = new URL(value); return url.protocol === 'https:' ? url.href : ''; } catch { return ''; } }
@@ -109,9 +110,11 @@
   }
   async function onAuthChanged() {
     const currentUser = user();
+    unsubscribeSocial?.(); unsubscribeSocial = null;
     state.savedIds = new Set(); state.profile = null;
     if (currentUser) { try { const [ids, profile] = await Promise.all([windowObject.GoHottData.getSavedVenueIds(currentUser.id), windowObject.GoHottData.getProfile(currentUser.id)]); state.savedIds = new Set(ids); state.profile = profile; } catch (error) { console.info(error.message); } }
     el('[data-account-label]').textContent = currentUser ? (state.profile?.display_name || currentUser.email?.split('@')[0] || 'Profile') : 'Sign in';
+    if (currentUser) unsubscribeSocial = windowObject.GoHottData.subscribeToSocial(currentUser.id, state.activeConversation, () => { if (state.route === 'social') renderSocial(); });
     renderDiscover(); if (state.route === 'profile') renderProfile(); if (state.route === 'saved') renderSaved(); if (state.route === 'social') renderSocial();
   }
 
@@ -152,7 +155,8 @@
   }
   async function searchPeople(form) { const result = await windowObject.GoHottData.searchPeople(new FormData(form).get('query')); state.people = result.people; el('#people-results').innerHTML = state.people.map(personCard).join('') || '<div class="state-card">No profiles match.</div>'; }
   async function toggleFollow(button) { await windowObject.GoHottData.setFollow(button.dataset.follow, button.dataset.following !== 'true'); await renderSocial('people'); }
-  async function startChat(targetId) { state.activeConversation = await windowObject.GoHottData.startConversation(targetId); await renderSocial('chats'); }
+  function connectActiveChat() { unsubscribeSocial?.(); unsubscribeSocial = user() ? windowObject.GoHottData.subscribeToSocial(user().id, state.activeConversation, () => { if (state.route === 'social') renderSocial('chats'); }) : null; }
+  async function startChat(targetId) { state.activeConversation = await windowObject.GoHottData.startConversation(targetId); connectActiveChat(); await renderSocial('chats'); }
   async function blockPerson(targetId) { if (!windowObject.confirm('Block this account? Following and messaging will stop.')) return; await windowObject.GoHottData.setBlock(targetId, true); await renderSocial('people'); }
   async function reportProfile(targetId) { const reason = windowObject.prompt('Report reason: spam, harassment, impersonation, privacy, unsafe, or other'); if (!reason) return; await windowObject.GoHottData.reportSocialContent('profile', targetId, reason.trim().toLowerCase()); windowObject.alert('Report received. Thank you.'); }
   async function shareItem(type, id, label) { const result = await windowObject.GoHottSocial.share({ type, id, title: label, text: `See ${label} on GoHott` }); if (result === 'copied') windowObject.alert('Share link copied.'); }
@@ -230,7 +234,7 @@
     const messagePerson = event.target.closest('[data-message-person]'); if (messagePerson) startChat(messagePerson.dataset.messagePerson).catch((error) => windowObject.alert(error.message));
     const block = event.target.closest('[data-block-person]'); if (block) blockPerson(block.dataset.blockPerson).catch((error) => windowObject.alert(error.message));
     const profileReport = event.target.closest('[data-report-profile]'); if (profileReport) reportProfile(profileReport.dataset.reportProfile).catch((error) => windowObject.alert(error.message));
-    const conversation = event.target.closest('[data-conversation]'); if (conversation) { state.activeConversation = conversation.dataset.conversation; renderSocial('chats'); }
+    const conversation = event.target.closest('[data-conversation]'); if (conversation) { state.activeConversation = conversation.dataset.conversation; connectActiveChat(); renderSocial('chats'); }
     const shareProfile = event.target.closest('[data-share-profile]'); if (shareProfile) shareItem('profile', shareProfile.dataset.shareProfile, shareProfile.dataset.shareLabel).catch((error) => windowObject.alert(error.message));
     const shareVenue = event.target.closest('[data-share-venue]'); if (shareVenue) shareItem('venue', shareVenue.dataset.shareVenue, shareVenue.dataset.shareLabel).catch((error) => windowObject.alert(error.message));
     const plan = event.target.closest('[data-save-plan]'); if (plan) savePlan(plan);
