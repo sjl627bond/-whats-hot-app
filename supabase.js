@@ -17,14 +17,18 @@
   }
 
   async function createCheckIn(payload) {
+    const report = { venue_id: payload.venue_id, crowd_level: payload.crowd_level, vibe: payload.vibe };
     if (payload.user_id) {
+      report.user_id = payload.user_id;
+      report.proximity_status = payload.proximity_status || 'unassessed';
+      report.distance_meters = payload.distance_meters ?? null;
       const cutoff = new Date(Date.now() - config.repeatCheckInMinutes * 60000).toISOString();
       const recent = await client.from('check_ins').select('created_at').eq('user_id', payload.user_id).eq('venue_id', payload.venue_id).gte('created_at', cutoff).limit(1);
       if (!recent.error && recent.data?.length) throw new Error(`You reported this venue recently. Try again in ${config.repeatCheckInMinutes} minutes.`);
     }
-    let result = await client.from('check_ins').insert(payload);
-    if (result.error && /user_id|verification_status|distance_meters|schema cache/i.test(result.error.message)) {
-      result = await client.from('check_ins').insert({ venue_id: payload.venue_id, crowd_level: payload.crowd_level, vibe: payload.vibe });
+    let result = await client.from('check_ins').insert(report);
+    if (result.error && /user_id|proximity_status|distance_meters|schema cache/i.test(result.error.message)) {
+      result = await client.from('check_ins').insert({ venue_id: report.venue_id, crowd_level: report.crowd_level, vibe: report.vibe });
     }
     if (result.error) throw new Error('Your report could not be sent. Please try again.');
   }
@@ -53,7 +57,7 @@
     return result.data;
   }
   async function getUserCheckIns(userId) {
-    const result = await client.from('check_ins').select('venue_id,crowd_level,vibe,created_at,verification_status').eq('user_id', userId).order('created_at', { ascending: false }).limit(20);
+    const result = await client.from('check_ins').select('venue_id,crowd_level,vibe,created_at,proximity_status').eq('user_id', userId).order('created_at', { ascending: false }).limit(20);
     if (result.error) return [];
     return result.data || [];
   }

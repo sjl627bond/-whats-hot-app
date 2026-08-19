@@ -20,10 +20,10 @@
   }
   function assess(position, venue) {
     if (!position) return { status: 'location_unavailable', distanceMeters: null };
-    if (venue.latitude === null || venue.latitude === '' || venue.longitude === null || venue.longitude === '') return { status: 'unverified', distanceMeters: null };
+    if (venue.latitude === null || venue.latitude === '' || venue.longitude === null || venue.longitude === '') return { status: 'unassessed', distanceMeters: null };
     const distance = distanceMeters(position, { latitude: Number(venue.latitude), longitude: Number(venue.longitude) });
-    if (distance === null) return { status: 'unverified', distanceMeters: null };
-    return { status: distance <= windowObject.GOHOTT_CONFIG.trustedRadiusMeters ? 'verified_nearby' : 'unverified', distanceMeters: distance };
+    if (distance === null) return { status: 'unassessed', distanceMeters: null };
+    return { status: distance <= windowObject.GOHOTT_CONFIG.trustedRadiusMeters ? 'client_nearby' : 'client_outside_radius', distanceMeters: distance };
   }
   const formatDistance = (meters) => meters == null ? '' : meters < 1000 ? `${meters} m` : `${(meters / 1609.344).toFixed(1)} mi`;
   windowObject.GoHottGeo = Object.freeze({ requestPosition, distanceMeters, assess, formatDistance, getLastPosition: () => lastPosition });

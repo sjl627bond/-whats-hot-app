@@ -15,8 +15,8 @@ async function run() {
   const accepted = loadGeo((success) => success({ coords: { latitude: 27.3364, longitude: -82.5307, accuracy: 20 } }));
   const position = await accepted.requestPosition();
   assert.equal(position.latitude, 27.3364);
-  assert.equal(accepted.assess(position, { latitude: 27.3365, longitude: -82.5307 }).status, 'verified_nearby');
-  assert.equal(accepted.assess(position, { latitude: null, longitude: null }).status, 'unverified');
+  assert.equal(accepted.assess(position, { latitude: 27.3365, longitude: -82.5307 }).status, 'client_nearby');
+  assert.equal(accepted.assess(position, { latitude: null, longitude: null }).status, 'unassessed');
   assert.match(accepted.formatDistance(1609), /mi/);
 
   const deniedError = Object.assign(new Error('denied'), { code: 1 });

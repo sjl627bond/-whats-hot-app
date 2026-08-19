@@ -1,4 +1,4 @@
--- GoHott Phase 2: additive identity, personalization, and trusted-report fields.
+-- GoHott Phase 2: additive identity, personalization, and client-assessed proximity fields.
 -- Existing venues and check_ins rows are preserved. Apply through the Supabase
 -- migration workflow after reviewing the target project's current policies.
 
@@ -19,9 +19,18 @@ create table if not exists public.saved_venues (
 );
 
 alter table public.check_ins add column if not exists user_id uuid references auth.users(id) on delete set null;
-alter table public.check_ins add column if not exists verification_status text not null default 'unverified'
-  check (verification_status in ('verified_nearby', 'unverified', 'location_unavailable', 'location_denied'));
+alter table public.check_ins add column if not exists proximity_status text not null default 'unassessed'
+  check (proximity_status in ('client_nearby', 'client_outside_radius', 'unassessed', 'location_unavailable', 'location_denied'));
 alter table public.check_ins add column if not exists distance_meters integer check (distance_meters is null or distance_meters >= 0);
+
+-- Anonymous reports remain compatible, but cannot carry client-nearby metadata.
+-- Authenticated client-nearby remains advisory and is not server verification.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname='check_ins_client_nearby_requires_user' and conrelid='public.check_ins'::regclass) then
+    alter table public.check_ins add constraint check_ins_client_nearby_requires_user
+      check (proximity_status <> 'client_nearby' or user_id is not null);
+  end if;
+end $$;
 
 create index if not exists check_ins_user_venue_created_idx
   on public.check_ins (user_id, venue_id, created_at desc)
@@ -72,16 +81,16 @@ do $$ begin
   if not exists (select 1 from pg_policies where schemaname='public' and tablename='check_ins' and policyname='check_ins_authenticated_insert') then
     create policy check_ins_authenticated_insert on public.check_ins for insert to authenticated with check ((select auth.uid()) = user_id);
   end if;
-  -- Restrictive policy prevents a legacy permissive INSERT policy from allowing
-  -- user_id spoofing after the ownership column is introduced.
+  -- PostgreSQL ORs permissive policies. This restrictive policy is ANDed with
+  -- every permissive INSERT policy, including the existing production policy.
   if not exists (select 1 from pg_policies where schemaname='public' and tablename='check_ins' and policyname='check_ins_identity_guard') then
     create policy check_ins_identity_guard on public.check_ins as restrictive for insert to anon, authenticated
       with check (
-        ((select auth.uid()) is null and user_id is null)
+        ((select auth.uid()) is null and user_id is null and proximity_status = 'unassessed' and distance_meters is null)
         or ((select auth.uid()) is not null and (select auth.uid()) = user_id)
       );
   end if;
 end $$;
 
-comment on column public.check_ins.verification_status is
-  'Client location assessment; verified_nearby requires venue coordinates and <= 500m distance. Treat as advisory until server verification is added.';
+comment on column public.check_ins.proximity_status is
+  'Untrusted client assessment only; client_nearby means the signed-in browser calculated <= 500m. It is not server-verified.';

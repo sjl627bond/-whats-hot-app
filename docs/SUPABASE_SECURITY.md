@@ -34,14 +34,17 @@ where table_schema = 'public'
 order by table_name, grantee, privilege_type;
 ```
 
-Confirm that no legacy policy grants `UPDATE` or `DELETE` to anonymous users. The migration adds a restrictive identity guard to prevent a broad legacy check-in insert policy from accepting a forged `user_id`.
+Confirm that no legacy policy grants `UPDATE` or `DELETE` to anonymous users. Production already has a permissive check-in INSERT policy. Because PostgreSQL combines permissive policies with OR, adding another narrow permissive policy would not restrict it. The migration therefore adds `check_ins_identity_guard` as a restrictive policy, which is ANDed with every permissive INSERT path.
 
 ## Required post-migration behavior
 
-- Anonymous users can read venues/check-ins and insert only check-ins with `user_id is null`.
+- Anonymous users can read venues/check-ins and insert only compatibility reports with `user_id is null`, `proximity_status = 'unassessed'`, and `distance_meters is null`.
 - Authenticated users can read venues/check-ins and insert only check-ins owned by `auth.uid()`.
 - Profiles are visible and writable only to their owner.
 - Saved relationships are visible and mutable only to their owner.
-- Client-supplied proximity status is advisory, not an authorization claim.
+- `client_nearby` requires a non-null account ID but remains a browser-supplied, advisory proximity estimate—not an authorization claim, cryptographic proof, or server verification.
+- The frontend only displays “Device-estimated nearby” when both `user_id` and `proximity_status = 'client_nearby'` are present. Anonymous rows never receive that indicator.
+
+The migration intentionally does not add any field called `verified` or `server_verified`. A future server-controlled function should own that state, revoke direct client writes to it, validate location evidence, and apply anti-abuse controls.
 
 Run Supabase database security/performance advisors after applying the migration, then test as both `anon` and two distinct authenticated users. User A must not be able to read or modify User B's profile or saved venues.

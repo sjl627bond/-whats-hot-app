@@ -8,7 +8,7 @@ Phase 1 established the GoHott brand, live Supabase venue ranking, city switchin
 
 - Persistent Supabase email/password authentication without blocking guest browsing
 - User profiles, saved venues, and personal check-in history
-- Location-aware distance display and trusted-nearby report metadata
+- Location-aware distance display and explicitly client-assessed proximity metadata
 - Repeated-report protection for authenticated users
 - Interactive Leaflet/OpenStreetMap experience with automatic venue markers when verified coordinates exist
 - Reusable venue detail screens with live status, score, line note, recent reports, Save, and Report actions
@@ -22,7 +22,7 @@ GoHott remains a dependency-light static application compatible with Vercel.
 | --- | --- |
 | `index.html` | App shell, accessible screens, navigation, and modal forms |
 | `styles.css` | Mobile-first visual system and responsive components |
-| `config.js` | Browser-safe configuration, city centers, and trust thresholds |
+| `config.js` | Browser-safe configuration, city centers, and proximity thresholds |
 | `supabase.js` | Data queries, mutations, realtime, profiles, and saves |
 | `auth.js` | Persistent session, sign-up, sign-in, sign-out, and auth state |
 | `geo.js` | Permission-based geolocation, distance, and proximity assessment |
@@ -58,9 +58,9 @@ The frontend depends on:
 
 ### Phase 2 migration
 
-Review and apply `supabase/migrations/20260819161930_gohott_phase_2.sql` using the normal Supabase migration workflow. It is additive: it creates `profiles` and `saved_venues`, adds nullable identity/trust metadata to `check_ins`, creates indexes, grants minimum table privileges, enables RLS, and adds ownership policies. It does not delete or rewrite venue/check-in rows.
+Review and apply `supabase/migrations/20260819161930_gohott_phase_2.sql` using the normal Supabase migration workflow. It is additive: it creates `profiles` and `saved_venues`, adds identity and client-assessed proximity metadata to `check_ins`, creates indexes, grants minimum table privileges, enables RLS, and adds ownership policies. It does not delete or rewrite venue/check-in rows.
 
-Before production application, inspect existing `venues` and `check_ins` policies. The migration adds a restrictive identity guard so legacy permissive insert policies cannot spoof `user_id`, but policy review remains required whenever old policies are unknown.
+Before production application, inspect existing `venues` and `check_ins` policies. PostgreSQL ORs permissive policies, so the migration adds a restrictive INSERT guard that is ANDed with the existing permissive check-in policy. It prevents identity spoofing and requires anonymous compatibility reports to use `proximity_status = 'unassessed'` with no distance.
 
 ## Authentication and authorization
 
@@ -73,7 +73,7 @@ Required RLS model:
 - `profiles`: authenticated users can select, insert, and update only `id = auth.uid()`
 - `saved_venues`: authenticated users can select, insert, and delete only `user_id = auth.uid()`
 
-The browser's proximity assessment is advisory. A production trust score should eventually validate location server-side and incorporate device/account abuse signals.
+`proximity_status = 'client_nearby'` means only that a signed-in browser calculated a distance within the configured radius. It is advisory, user-controlled evidence—not cryptographic proof or server verification. Anonymous reports never submit or display that label. A future server-owned field and trusted function should validate location and incorporate device/account abuse signals before any report is called verified.
 
 ## Location and map behavior
 
@@ -97,13 +97,13 @@ After deploying, add the production and preview URLs to Supabase Auth redirect/s
 - Existing venues need legitimate coordinates before venue markers/distances can render.
 - Email confirmation depends on Supabase Auth project mail settings.
 - Guest check-ins remain for backward compatibility and are untrusted.
-- Location verification and repeat throttling are client-assisted; robust anti-abuse enforcement needs server-side validation.
+- Proximity assessment and repeat throttling are client-assisted; robust anti-abuse enforcement needs server-side validation.
 - Public OpenStreetMap tiles are suitable for current light traffic; a production-scale tile strategy must follow the provider usage policy.
 
 ## Phase 3 priorities
 
 1. Curate verified venue coordinates, addresses, hours, media, and data provenance.
-2. Add server-side check-in validation, rate limiting, moderation, and trust weighting.
+2. Add server-owned check-in validation, rate limiting, moderation, and trust weighting; only then introduce verified terminology.
 3. Add Google/Apple Auth after provider and redirect configuration.
 4. Add automated unit, browser, accessibility, and migration integration tests.
 5. Add observability, privacy controls, account deletion/export, analytics, and incident tooling.
