@@ -19,6 +19,7 @@ create table if not exists public.push_notification_devices (
   unique(user_id,token_hash)
 );
 create index if not exists push_notification_devices_user_idx on public.push_notification_devices(user_id) where enabled;
+create index if not exists push_notification_devices_user_all_idx on public.push_notification_devices(user_id);
 alter table public.push_notification_devices enable row level security;
 revoke all on public.push_notification_devices from anon, authenticated;
 
@@ -28,6 +29,7 @@ create table if not exists public.client_error_reports (
   route text check (length(route)<=100), release text check (length(release)<=64), occurred_at timestamptz not null, received_at timestamptz not null default now()
 );
 create index if not exists client_error_reports_recent_idx on public.client_error_reports(received_at desc);
+create index if not exists client_error_reports_user_idx on public.client_error_reports(user_id) where user_id is not null;
 alter table public.client_error_reports enable row level security;
 revoke all on public.client_error_reports from anon, authenticated;
 
