@@ -9,6 +9,12 @@
   "background_color": "#09090b",
   "theme_color": "#09090b",
   "orientation": "portrait-primary",
+  "launch_handler": { "client_mode": "navigate-existing" },
+  "shortcuts": [
+    { "name": "Discover", "url": "./#discover" },
+    { "name": "Map", "url": "./#map" },
+    { "name": "Saved", "url": "./#saved" }
+  ],
   "categories": ["entertainment", "lifestyle", "social"],
   "icons": [
     {
