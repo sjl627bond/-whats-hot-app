@@ -4,7 +4,7 @@
 
 ## What it adds
 
-- Optional social profile fields, unique usernames, visibility and messaging preferences
+- Optional social profile fields, constrained unique usernames, visibility and messaging preferences. Existing profiles default to private until their owner explicitly opts in.
 - Follow/request and two-way block relationships
 - Participant-only direct conversations, messages and typed share references
 - Privacy-scoped nightlife plans that represent future intent only

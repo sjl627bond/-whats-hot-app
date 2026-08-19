@@ -1,12 +1,12 @@
 -- GoHott Phase 5 social foundation. REVIEW ONLY: do not apply without approval.
 -- Additive and backward compatible; no production rows are deleted or rewritten.
 
-alter table public.profiles add column if not exists username text;
+alter table public.profiles add column if not exists username text check (username is null or username ~ '^[a-z0-9_]{3,24}$');
 alter table public.profiles add column if not exists avatar_url text check (avatar_url is null or avatar_url ~ '^https://');
 alter table public.profiles add column if not exists bio text check (bio is null or char_length(bio) <= 160);
 alter table public.profiles add column if not exists favorite_categories text[] not null default '{}';
 alter table public.profiles add column if not exists social_links jsonb not null default '{}'::jsonb check (jsonb_typeof(social_links) = 'object');
-alter table public.profiles add column if not exists profile_visibility text not null default 'public' check (profile_visibility in ('public','followers','private'));
+alter table public.profiles add column if not exists profile_visibility text not null default 'private' check (profile_visibility in ('public','followers','private'));
 alter table public.profiles add column if not exists message_permission text not null default 'followers' check (message_permission in ('everyone','followers','mutuals','nobody'));
 alter table public.profiles add column if not exists follower_visibility text not null default 'followers' check (follower_visibility in ('public','followers','private'));
 alter table public.profiles add column if not exists show_social_activity boolean not null default true;
@@ -21,6 +21,7 @@ create table if not exists public.user_blocks (
   primary key (blocker_id, blocked_id),
   check (blocker_id <> blocked_id)
 );
+create index if not exists user_blocks_blocked_idx on public.user_blocks (blocked_id,created_at desc);
 
 create table if not exists public.follows (
   follower_id uuid not null references auth.users(id) on delete cascade,
@@ -59,6 +60,7 @@ create table if not exists public.messages (
   removed_at timestamptz
 );
 create index if not exists messages_conversation_recent_idx on public.messages (conversation_id,created_at desc,id);
+create index if not exists messages_sender_recent_idx on public.messages (sender_id,created_at desc);
 create table if not exists public.message_references (
   message_id uuid primary key references public.messages(id) on delete cascade,
   reference_type text not null check (reference_type in ('venue','profile','live_look','plan')),
@@ -88,6 +90,7 @@ create table if not exists public.live_look_reactions (
   primary key (live_look_id,user_id)
 );
 create index if not exists live_look_reactions_look_idx on public.live_look_reactions (live_look_id,reaction);
+create index if not exists live_look_reactions_user_idx on public.live_look_reactions (user_id,created_at desc);
 
 create table if not exists public.social_notifications (
   id uuid primary key default gen_random_uuid(),
@@ -101,6 +104,8 @@ create table if not exists public.social_notifications (
   read_at timestamptz
 );
 create index if not exists social_notifications_unread_idx on public.social_notifications (recipient_id,created_at desc) where read_at is null;
+create index if not exists social_notifications_recipient_recent_idx on public.social_notifications (recipient_id,created_at desc);
+create index if not exists social_notifications_actor_idx on public.social_notifications (actor_id,created_at desc) where actor_id is not null;
 
 create table if not exists public.social_reports (
   id uuid primary key default gen_random_uuid(),
@@ -203,7 +208,8 @@ language sql stable security definer set search_path='' as $$
     exists(select 1 from public.follows a join public.follows b on b.follower_id=a.following_id and b.following_id=a.follower_id where a.follower_id=(select auth.uid()) and a.following_id=p.id and a.status='accepted' and b.status='accepted')
   from public.profiles p
   where public.require_active_social_session() is not null and p.id<>(select auth.uid()) and not public.social_block_exists(p.id)
-    and p.profile_visibility<>'private' and (coalesce(p_query,'')='' or p.username ilike '%'||p_query||'%' or p.display_name ilike '%'||p_query||'%')
+    and (p.profile_visibility='public' or (p.profile_visibility='followers' and exists(select 1 from public.follows visible where visible.follower_id=(select auth.uid()) and visible.following_id=p.id and visible.status='accepted')))
+    and (coalesce(p_query,'')='' or p.username ilike '%'||p_query||'%' or p.display_name ilike '%'||p_query||'%')
   order by (p.home_city=(select me.home_city from public.profiles me where me.id=(select auth.uid()))) desc,p.updated_at desc limit least(greatest(p_limit,1),50)
 $$;
 
