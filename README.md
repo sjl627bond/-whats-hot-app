@@ -13,6 +13,8 @@ Phase 1 established the GoHott brand, live Supabase venue ranking, city switchin
 - Private location-evidence/moderation architecture and user-owned account-deletion requests
 - Verified-coordinate-only map markers with graceful location/metadata fallbacks
 
+Phase 4 adds the review-ready **Live Look** foundation: temporary venue photos, camera/library upload, short-lived signed media, server-assessed proximity, owner removal, community reporting, moderation holds, and graceful behavior before its additive migration is enabled. The migration is included for review only and has not been applied to production.
+
 ## Architecture
 
 GoHott remains a dependency-light static application compatible with Vercel.
@@ -25,12 +27,14 @@ GoHott remains a dependency-light static application compatible with Vercel.
 | `supabase.js` | Data queries, mutations, realtime, profiles, and saves |
 | `auth.js` | Persistent session, sign-up, sign-in, sign-out, and auth state |
 | `geo.js` | Permission-based geolocation, distance, and proximity assessment |
+| `live-look.js` | Live Look file/caption validation, hashing, and time labels |
 | `ranking.js` | Explainable recency, trust, deduplication, and influence-capped ranking |
 | `map.js` | Leaflet map, OpenStreetMap tiles, venue markers, and user position |
 | `app.js` | Product state, scoring, navigation, views, and interaction orchestration |
 | `sw.js` | Versioned network-first app-shell cache |
 | `supabase/migrations/` | Additive database schema, grants, and RLS policies |
 | `docs/PHASE3_MIGRATION.md` | Phase 3 security review, rollout, and production configuration checklist |
+| `docs/PHASE4_MIGRATION.md` | Live Look Storage, RLS, privacy, cleanup, and rollout checklist |
 
 No framework or build step is required.
 
@@ -111,12 +115,14 @@ After deploying, add the production and preview URLs to Supabase Auth redirect/s
 - Expired private location evidence needs a separately configured retention job.
 - Account deletion requests need a privileged backend worker before they can complete Auth deletion and session revocation.
 - Public OpenStreetMap tiles are suitable for current light traffic; a production-scale tile strategy must follow the provider usage policy.
+- Live Look stays disabled until the Phase 4 migration and private Storage policies receive review and explicit approval.
+- “Until close” is capped at four hours and safely falls back to 60 minutes until verified structured venue hours are populated.
+- A privileged retention worker and moderator console are required before Live Look production enablement.
 
-## Phase 4 priorities
+## Next priorities
 
-1. Build privileged venue curation, claim review, and moderation operations with audit logging.
-2. Add stronger device-attestation/anti-sybil signals and server-side IP/device rate limiting with privacy review.
-3. Implement the deletion/retention workers and self-service data export.
-4. Add end-to-end migration tests against an isolated Supabase project and continuous browser/accessibility CI.
-5. Add observability, incident tooling, privacy analytics, and ranking-quality dashboards.
-6. Evaluate a production tile provider and Realtime Broadcast strategy as traffic grows.
+1. Review and stage the Phase 4 migration, then build privileged moderation and retention workers.
+2. Add self-service data export and complete media cleanup in account deletion.
+3. Add edge-level abuse signals and rate limiting with a privacy review.
+4. Add end-to-end isolated-Supabase and mobile-browser CI.
+5. Add privacy-safe observability and evaluate production map tiles/Realtime Broadcast at scale.

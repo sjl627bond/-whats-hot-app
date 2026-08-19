@@ -1,0 +1,15 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(new URL('../live-look.js', `file://${__filename}`), 'utf8');
+const window = { crypto: { subtle: {} } };
+vm.runInNewContext(source, { window, Date, Math, Error, String, Number, Object });
+const live = window.GoHottLiveLook;
+assert.equal(live.validateFile({ type: 'image/jpeg', size: 1024 }).extension, 'jpg');
+assert.throws(() => live.validateFile({ type: 'text/html', size: 10 }), /JPEG/);
+assert.throws(() => live.validateFile({ type: 'image/png', size: live.MAX_BYTES + 1 }), /8 MB/);
+assert.equal(live.validateCaption('  scene now  '), 'scene now');
+assert.throws(() => live.validateCaption('x'.repeat(81)), /80/);
+assert.equal(live.ageLabel('2026-08-19T12:00:00Z', Date.parse('2026-08-19T12:20:00Z')), '20m ago');
+assert.equal(live.remainingLabel('2026-08-19T13:00:00Z', Date.parse('2026-08-19T12:20:00Z')), '40m left');
+console.log('Live Look unit tests passed');

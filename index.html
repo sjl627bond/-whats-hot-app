@@ -101,8 +101,24 @@
     </div>
   </div>
 
+  <div class="modal" id="live-look-modal" role="dialog" aria-modal="true" aria-labelledby="live-look-title" hidden>
+    <button class="modal-backdrop" type="button" data-close-live-look aria-label="Close Live Look"></button>
+    <div class="sheet live-look-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-live-look aria-label="Close">×</button>
+      <p class="eyebrow">LIVE LOOK</p><h2 id="live-look-title">Show the scene now.</h2>
+      <p class="sheet-copy">Temporary venue photos are location-assessed by GoHott. This is not proof of presence.</p>
+      <form id="live-look-form">
+        <div class="photo-choices"><label class="secondary-button">Take photo<input name="camera" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment"></label><label class="secondary-button">Choose photo<input name="library" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"></label></div>
+        <img id="live-look-preview" class="live-look-preview" alt="Selected Live Look preview" hidden>
+        <label>Caption <span id="caption-count">0/80</span><input name="caption" maxlength="80" placeholder="What’s happening?"></label>
+        <fieldset><legend>Visible for</legend><div class="duration-grid"><label><input type="radio" name="duration" value="15_minutes">15 min</label><label><input type="radio" name="duration" value="30_minutes">30 min</label><label><input type="radio" name="duration" value="60_minutes" checked>60 min</label><label><input type="radio" name="duration" value="until_close">Until close*</label></div></fieldset>
+        <small>*Uses verified structured closing hours, capped at four hours, or a safe 60-minute fallback.</small>
+        <button class="primary-button" type="submit">Publish Live Look</button><p class="form-message" id="live-look-message" role="status"></p>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-  <script src="config.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
+  <script src="config.js"></script><script src="live-look.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
 </body>
 </html>
