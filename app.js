@@ -1,6 +1,6 @@
 (function initialiseApp(windowObject, documentObject) {
   'use strict';
-  const state = { venues: [], checkIns: [], markets: [], liveLooks: [], liveLooksAvailable: false, selectedLiveLookFile: null, savedIds: new Set(), profile: null, socialTab: 'people', people: [], conversations: [], activeConversation: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle' };
+  const state = { venues: [], checkIns: [], markets: [], liveLooks: [], liveLooksAvailable: false, selectedLiveLookFile: null, savedIds: new Set(), profile: null, socialTab: 'people', people: [], conversations: [], activeConversation: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle', pendingDeepLink: null };
   let lastFocusedElement = null;
   let unsubscribeSocial = null;
   const el = (selector) => documentObject.querySelector(selector);
@@ -91,16 +91,16 @@
     state.route = route; documentObject.querySelectorAll('[data-screen]').forEach((screen) => { screen.hidden = screen.dataset.screen !== route; });
     documentObject.querySelectorAll('.nav-item').forEach((button) => { const active = button.dataset.route === route || (route === 'venue' && button.dataset.route === state.previousRoute); button.classList.toggle('is-active', active); if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
     if (!options.skipHash) windowObject.location.hash = route === 'venue' && state.currentVenue ? `venue/${state.currentVenue.id}` : route;
-    if (route === 'map') renderMap(); if (route === 'saved') renderSaved(); if (route === 'social') renderSocial(); if (route === 'profile') renderProfile(); windowObject.scrollTo({ top: 0, behavior: 'instant' });
+    if (!options.skipRender) { if (route === 'map') renderMap(); if (route === 'saved') renderSaved(); if (route === 'social') renderSocial(); if (route === 'profile') renderProfile(); } windowObject.scrollTo({ top: 0, behavior: 'instant' });
   }
   function handleDeepLink(value = windowObject.location.hash) {
-    const deepLink = windowObject.GoHottMobile.parseDeepLink(value);
-    if (!deepLink) return false;
-    if (deepLink.type === 'venue' && venueById(deepLink.id)) { openVenue(deepLink.id); return true; }
-    if (deepLink.type === 'profile') { navigate('social', { skipHash: true }); return true; }
-    const look = state.liveLooks.find((item) => String(item.id) === deepLink.id);
-    if (look?.venue_id && venueById(look.venue_id)) { openVenue(look.venue_id); return true; }
-    navigate('discover', { skipHash: true }); return true;
+    const destination = windowObject.GoHottMobile.resolveDeepLink(value, { venues: state.venues, liveLooks: state.liveLooks });
+    if (!destination) return false;
+    if (destination.route === 'venue') { state.pendingDeepLink = null; openVenue(destination.venueId); }
+    else if (destination.view === 'profile') { state.pendingDeepLink = value; openSharedProfile(destination.id); }
+    else if (destination.view === 'plan') { state.pendingDeepLink = value; openSharedPlan(destination.id); }
+    else { navigate('discover', { skipHash: true }); showNotice(el('#error-region'), 'This shared item is unavailable or no longer active.', 'error'); }
+    return true;
   }
   function openVenue(id) { const venue = venueById(id); if (!venue) return; state.currentVenue = venue; renderVenueDetail(id); navigate('venue'); }
   function renderVenueDetail(id) {
@@ -129,7 +129,7 @@
     if (currentUser) { try { const [ids, profile] = await Promise.all([windowObject.GoHottData.getSavedVenueIds(currentUser.id), windowObject.GoHottData.getProfile(currentUser.id)]); state.savedIds = new Set(ids); state.profile = profile; } catch (error) { console.info(error.message); } }
     el('[data-account-label]').textContent = currentUser ? (state.profile?.display_name || currentUser.email?.split('@')[0] || 'Profile') : 'Sign in';
     if (currentUser) unsubscribeSocial = windowObject.GoHottData.subscribeToSocial(currentUser.id, state.activeConversation, () => { if (state.route === 'social') renderSocial(); });
-    renderDiscover(); if (state.route === 'profile') renderProfile(); if (state.route === 'saved') renderSaved(); if (state.route === 'social') renderSocial();
+    renderDiscover(); if (state.pendingDeepLink) handleDeepLink(state.pendingDeepLink); else { if (state.route === 'profile') renderProfile(); if (state.route === 'saved') renderSaved(); if (state.route === 'social') renderSocial(); }
   }
 
   async function toggleSave(id) {
@@ -145,9 +145,21 @@
   function socialTabs() {
     return `<div class="social-tabs" role="tablist" aria-label="Social sections">${['people', 'feed', 'chats'].map((tab) => `<button type="button" role="tab" data-social-tab="${tab}" aria-selected="${state.socialTab === tab}" class="${state.socialTab === tab ? 'is-active' : ''}">${tab[0].toUpperCase() + tab.slice(1)}</button>`).join('')}</div>`;
   }
-  function personCard(person) {
+  function personCard(person, { actions = true } = {}) {
     const avatar = safeHttpsUrl(person.avatar_url);
-    return `<article class="person-card"><div class="social-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml((person.display_name || person.username || 'G')[0].toUpperCase())}</div><div class="person-copy"><strong>${escapeHtml(person.display_name || person.username || 'GoHott member')}${person.is_mutual ? ' · Mutual' : ''}</strong><span>${person.username ? `@${escapeHtml(person.username)} · ` : ''}${escapeHtml(person.home_city || '')}</span><span>${escapeHtml(person.bio || '')}</span><span>${escapeHtml(person.follower_count || 0)} followers · ${escapeHtml(person.following_count || 0)} following</span></div><div class="person-actions"><button type="button" data-follow="${escapeHtml(person.id)}" data-following="${person.is_following}">${person.is_following ? 'Following' : 'Follow'}</button><button type="button" data-message-person="${escapeHtml(person.id)}">Message</button><button type="button" data-share-profile="${escapeHtml(person.id)}" data-share-label="${escapeHtml(person.display_name || person.username || 'GoHott profile')}" aria-label="Share profile">↗</button><button type="button" data-report-profile="${escapeHtml(person.id)}" aria-label="Report profile">!</button><button type="button" data-block-person="${escapeHtml(person.id)}" aria-label="Block profile">Block</button></div></article>`;
+    return `<article class="person-card"><div class="social-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml((person.display_name || person.username || 'G')[0].toUpperCase())}</div><div class="person-copy"><strong>${escapeHtml(person.display_name || person.username || 'GoHott member')}${person.is_mutual ? ' · Mutual' : ''}</strong><span>${person.username ? `@${escapeHtml(person.username)} · ` : ''}${escapeHtml(person.home_city || '')}</span><span>${escapeHtml(person.bio || '')}</span><span>${escapeHtml(person.follower_count || 0)} followers · ${escapeHtml(person.following_count || 0)} following</span></div>${actions ? `<div class="person-actions"><button type="button" data-follow="${escapeHtml(person.id)}" data-following="${person.is_following}">${person.is_following ? 'Following' : 'Follow'}</button><button type="button" data-message-person="${escapeHtml(person.id)}">Message</button><button type="button" data-share-profile="${escapeHtml(person.id)}" data-share-label="${escapeHtml(person.display_name || person.username || 'GoHott profile')}" aria-label="Share profile">↗</button><button type="button" data-report-profile="${escapeHtml(person.id)}" aria-label="Report profile">!</button><button type="button" data-block-person="${escapeHtml(person.id)}" aria-label="Block profile">Block</button></div>` : ''}</article>`;
+  }
+  async function openSharedProfile(id) {
+    navigate('social', { skipHash: true, skipRender: true }); const container = el('#social-content');
+    container.innerHTML = '<div class="loading"><span></span>Loading profile…</div>';
+    try { const profile = await windowObject.GoHottData.getSharedProfile(id); if (state.route !== 'social') return; state.pendingDeepLink = null; const isSelf = String(user()?.id || '') === String(profile?.id || ''); container.innerHTML = profile ? `<button class="text-button" type="button" data-social-tab="people">← People</button><div class="social-panel-title"><h2>Shared profile</h2></div>${personCard(profile, { actions: !isSelf })}` : '<div class="state-card">This profile is private, blocked, or unavailable.</div>'; }
+    catch (error) { if (state.route === 'social') container.innerHTML = `<div class="state-card error">${escapeHtml(error.message)}</div>`; }
+  }
+  async function openSharedPlan(id) {
+    navigate('social', { skipHash: true, skipRender: true }); const container = el('#social-content');
+    container.innerHTML = '<div class="loading"><span></span>Loading plan…</div>';
+    try { const plan = await windowObject.GoHottData.getNightlifePlan(id); if (state.route !== 'social') return; state.pendingDeepLink = null; const venue = plan && venueById(plan.venue_id); container.innerHTML = plan ? `<button class="text-button" type="button" data-social-tab="feed">← Activity</button><article class="plan-card"><p class="eyebrow">SHARED NIGHTLIFE PLAN</p><h2>${escapeHtml(plan.status[0].toUpperCase() + plan.status.slice(1))}${venue ? ` · ${escapeHtml(venue.name)}` : ''}</h2><p>${escapeHtml(plan.plan_date)} · ${escapeHtml(plan.visibility)}</p>${venue ? `<button class="secondary-button" type="button" data-venue="${escapeHtml(venue.id)}">Open venue</button>` : ''}</article>` : '<div class="state-card">This plan is private, blocked, expired, or unavailable.</div>'; }
+    catch (error) { if (state.route === 'social') container.innerHTML = `<div class="state-card error">${escapeHtml(error.message)}</div>`; }
   }
   async function renderSocial(tab = state.socialTab) {
     state.socialTab = tab; const container = el('#social-content');
