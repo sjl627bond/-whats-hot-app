@@ -16,7 +16,9 @@
     "@capacitor/geolocation": "8.2.2",
     "@capacitor/keyboard": "8.0.5",
     "@capacitor/push-notifications": "8.1.2",
-    "@capacitor/share": "8.0.1"
+    "@capacitor/share": "8.0.1",
+    "@supabase/supabase-js": "2.57.4",
+    "leaflet": "1.9.4"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.0",

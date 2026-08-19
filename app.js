@@ -284,6 +284,7 @@
   windowObject.GoHottAuth.subscribe(onAuthChanged); windowObject.GoHottAuth.initialise();
   windowObject.GoHottData.subscribeToCheckIns(loadVenues, (status) => { if (status === 'CHANNEL_ERROR') el('#fresh').textContent = 'Refresh needed'; });
   windowObject.GoHottData.subscribeToLiveLooks(() => loadVenues());
+  windowObject.addEventListener('online', () => loadVenues());
   loadVenues(); renderAuthMode();
   const [initialRoute, initialId] = windowObject.location.hash.slice(1).split('/'); if (initialRoute === 'venue' && initialId) { state.currentVenue = venueById(initialId); } if (!windowObject.GoHottMobile.parseDeepLink()) navigate(['discover', 'map', 'saved', 'social', 'profile'].includes(initialRoute) ? initialRoute : 'discover', { skipHash: true });
   if ('serviceWorker' in navigator) windowObject.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch((error) => console.warn('Service worker registration failed.', error)));

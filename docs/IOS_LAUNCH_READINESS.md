@@ -4,7 +4,7 @@
 
 The Phase 6 web app is now packaged with Capacitor 8. The native shell preserves the tested HTML/CSS/JavaScript and Supabase backend while providing camera, Photos, location, push, sharing, App/Universal Link, keyboard, and lifecycle bridges. The PWA remains the canonical product implementation; product logic is not forked into Swift.
 
-`com.placeholder.gohott` is deliberately non-release configuration. It is not a recommended or reserved identifier. Replace it in `capacitor.config.json` and both Xcode build configurations only after the owner supplies and registers the final reverse-DNS Bundle ID. No Apple Team ID, signing identity, certificate, profile, App Store Connect ID, or APNs credential is committed.
+`com.placeholder.gohott` is deliberately non-release configuration. It is not a recommended or reserved identifier. Replace it in `capacitor.config.json` and both Xcode build configurations only after the owner supplies and registers the final reverse-DNS Bundle ID. Xcode may record the team explicitly selected by the owner, but no signing identity, certificate, provisioning profile, App Store Connect ID, or APNs credential is committed.
 
 ## Native requirements
 
@@ -23,6 +23,8 @@ The Phase 6 web app is now packaged with Capacitor 8. The native shell preserves
 - `ios/App/App.xcworkspace` opens the generated Swift Package Manager-based iOS project.
 - `Info.plist` contains camera, Photos, and foreground-only location explanations. Background location is not requested and ATS is not weakened.
 - `native-runtime.js` is a no-op in browsers and uses native APIs only in Capacitor. It handles explicit photo selection, foreground location, user-initiated notification permission, native sharing, lifecycle-aware auth refresh, and validated deep links.
+- The native build vendors the exact pinned Supabase JS and Leaflet releases instead of depending on CDN availability. A cold offline launch can render GoHott's shell and truthful unavailable states; live data and map tiles still require network access.
+- Simulator camera-unavailable errors fall back to the Photos picker. Location denial/restriction is normalized into the existing optional-location fallback, and reconnecting refreshes live venue data.
 - The existing Supabase client continues to persist sessions inside the app's WKWebView sandbox and refreshes them only while active. Sign-out remains local-session revocation. No service-role or APNs secret is present.
 - `App.entitlements.example` and `PrivacyInfo.xcprivacy.example` are review templates only. They are intentionally not build-linked until the real App ID/domain and verified privacy inventory are supplied.
 

@@ -18,9 +18,14 @@
       targetHeight: 1600,
       correctOrientation: true,
     };
-    const result = source === 'camera'
-      ? await camera.takePhoto(options)
-      : (await camera.chooseFromGallery({ ...options, mediaType: 0, allowMultipleSelection: false, limit: 1 })).results?.[0];
+    const chooseFromGallery = async () => (await camera.chooseFromGallery({ ...options, mediaType: 0, allowMultipleSelection: false, limit: 1 })).results?.[0];
+    let result;
+    try { result = source === 'camera' ? await camera.takePhoto(options) : await chooseFromGallery(); }
+    catch (error) {
+      const noCamera = error?.code === 'OS-PLUG-CAMR-0007' || /no camera|camera.*unavailable/i.test(error?.message || '');
+      if (source !== 'camera' || !noCamera) throw error;
+      result = await chooseFromGallery();
+    }
     if (!result?.webPath) throw new Error('The selected photo could not be read.');
     const response = await fetch(result.webPath);
     if (!response.ok) throw new Error('The selected photo could not be read.');
@@ -31,13 +36,20 @@
 
   async function requestPosition() {
     const geolocation = plugin('Geolocation');
-    const permission = await geolocation.checkPermissions();
-    if (permission.location !== 'granted') {
-      const requested = await geolocation.requestPermissions({ permissions: ['location'] });
-      if (requested.location !== 'granted') throw Object.assign(new Error('Location permission was not granted.'), { code: 1 });
+    try {
+      const permission = await geolocation.checkPermissions();
+      if (permission.location !== 'granted') {
+        const requested = await geolocation.requestPermissions({ permissions: ['location'] });
+        if (requested.location !== 'granted') throw Object.assign(new Error('Location permission was not granted.'), { code: 1 });
+      }
+      const position = await geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 });
+      return { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
+    } catch (error) {
+      if (error?.code === 1 || /denied|restricted|permission/i.test(`${error?.code || ''} ${error?.message || ''}`)) {
+        throw Object.assign(new Error('Location permission was not granted.'), { code: 1 });
+      }
+      throw Object.assign(new Error('Location is temporarily unavailable.'), { code: 0 });
     }
-    const position = await geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 });
-    return { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
   }
 
   async function requestPushPermission() {
@@ -57,9 +69,11 @@
   function normaliseDeepLink(rawUrl) {
     try {
       const url = new URL(rawUrl);
-      const parts = url.pathname.split('/').filter(Boolean);
+      const hashPath = url.hash.replace(/^#\/?/, '');
+      const parts = (hashPath || url.pathname).split('/').filter(Boolean);
       if (!parts.length && url.protocol !== 'https:') parts.push(url.hostname);
       else if (url.protocol !== 'https:' && ['venue', 'profile', 'live-look', 'plan'].includes(url.hostname)) parts.unshift(url.hostname);
+      if (parts[0] === 'share') parts.shift();
       const [type, id] = parts;
       if (!['venue', 'profile', 'live-look', 'plan'].includes(type) || !/^[a-zA-Z0-9-]{1,64}$/.test(id || '')) return null;
       return `#share/${type}/${id}`;
