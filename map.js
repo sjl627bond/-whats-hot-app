@@ -14,18 +14,18 @@
     return map;
   }
   function scoreColor(score) { return score >= 85 ? '#ff5315' : score >= 70 ? '#ff9a69' : '#f1b45a'; }
-  function render({ venues, city, position, selectVenue }) {
+  function render({ venues, city, center, position, selectVenue }) {
     onSelect = selectVenue; const instance = ensureMap();
     const message = documentObject.querySelector('#map-message');
     if (!instance) { message.textContent = 'The interactive map could not load. Venue discovery is still available.'; return; }
-    venueLayer.clearLayers(); instance.setView(centers[city], city === 'Sarasota' ? 13 : 12);
-    const mappable = venues.filter((venue) => venue.latitude !== null && venue.latitude !== '' && venue.longitude !== null && venue.longitude !== '' && Number.isFinite(Number(venue.latitude)) && Number.isFinite(Number(venue.longitude)));
+    venueLayer.clearLayers(); instance.setView(center || centers[city] || centers.Sarasota, city === 'Sarasota' ? 13 : 12);
+    const mappable = venues.filter((venue) => venue.coordinate_status === 'verified' && venue.latitude !== null && venue.latitude !== '' && venue.longitude !== null && venue.longitude !== '' && Number.isFinite(Number(venue.latitude)) && Number.isFinite(Number(venue.longitude)));
     mappable.forEach((venue) => {
       const marker = windowObject.L.circleMarker([Number(venue.latitude), Number(venue.longitude)], { radius: 13, color: '#09090b', weight: 3, fillColor: scoreColor(venue.live_score), fillOpacity: 1 });
       marker.bindTooltip(String(venue.live_score), { permanent: true, direction: 'center', className: 'score-tooltip' });
       marker.on('click', () => onSelect?.(venue)); marker.addTo(venueLayer);
     });
-    message.textContent = mappable.length ? `${mappable.length} live venues mapped.` : 'Venue coordinates are not available yet. The map is ready and markers will appear as verified coordinates are added.';
+    message.textContent = mappable.length ? `${mappable.length} venues mapped with verified coordinates.` : 'Verified venue coordinates are not available for this market yet. Discovery still works normally.';
     if (position) setUserPosition(position);
     setTimeout(() => instance.invalidateSize(), 0);
   }

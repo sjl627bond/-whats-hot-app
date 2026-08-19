@@ -1,23 +1,35 @@
 (function initialiseApp(windowObject, documentObject) {
   'use strict';
-  const state = { venues: [], checkIns: [], savedIds: new Set(), profile: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle' };
+  const state = { venues: [], checkIns: [], markets: [], savedIds: new Set(), profile: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle' };
   let lastFocusedElement = null;
   const el = (selector) => documentObject.querySelector(selector);
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
-  const cityVenues = () => state.venues.filter((venue) => state.currentCity === 'Sarasota' ? venue.area === 'Sarasota' : venue.area !== 'Sarasota');
+  function safeHttpsUrl(value) { try { const url = new URL(value); return url.protocol === 'https:' ? url.href : ''; } catch { return ''; } }
+  const cityVenues = () => state.venues.filter((venue) => {
+    if (venue.market_id) return state.markets.find((market) => market.id === venue.market_id)?.name === state.currentCity;
+    return state.currentCity === 'Sarasota' ? venue.area === 'Sarasota' : venue.area !== 'Sarasota';
+  });
   const user = () => windowObject.GoHottAuth.getUser();
 
   function calculateLiveVenues(venues, checkIns) {
-    return venues.map((venue) => {
-      const reports = checkIns.filter((report) => String(report.venue_id) === String(venue.id));
-      const adjustment = Math.max(-15, Math.min(15, reports.reduce((total, report) => total + ({ 5: 3, 4: 2, 2: -1, 1: -3 }[report.crowd_level] || 0), 0)));
-      const latest = reports[0]; const hasCoordinates = venue.latitude !== null && venue.latitude !== '' && venue.longitude !== null && venue.longitude !== '';
+    return windowObject.GoHottRanking.rankVenues(venues, checkIns).map((venue) => {
+      const hasCoordinates = venue.latitude !== null && venue.latitude !== '' && venue.longitude !== null && venue.longitude !== '';
       const distance = state.position && hasCoordinates ? windowObject.GoHottGeo.distanceMeters(state.position, { latitude: Number(venue.latitude), longitude: Number(venue.longitude) }) : null;
-      return { ...venue, live_score: Math.max(0, Math.min(100, Number(venue.hot_score || 50) + adjustment)), live_status: latest?.vibe || venue.status || 'CHILL', distance_meters: distance };
-    }).sort((a, b) => b.live_score - a.live_score);
+      return { ...venue, distance_meters: distance };
+    });
   }
   function venueById(id) { return state.venues.find((venue) => String(venue.id) === String(id)); }
   function readableTime(value) { if (!value) return ''; const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000)); return minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.floor(minutes / 60)}h ago`; }
+  function reportTrustLabel(report) {
+    if (report.trust_tier === 'server_assessed_nearby') return ' · Proximity assessed';
+    if (!report.trust_tier && report.user_id && report.proximity_status === 'client_nearby') return ' · Device-estimated nearby';
+    return '';
+  }
+  function tonightHours(hours) {
+    if (!hours || typeof hours !== 'object') return '';
+    const day = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(new Date()).toLowerCase();
+    return hours[day] || hours[day.slice(0, 3)] || '';
+  }
   function friendlyAuthError(message) { if (/invalid login/i.test(message)) return 'Email or password is incorrect.'; if (/already registered/i.test(message)) return 'An account already exists for that email.'; return message; }
   function showNotice(target, message, type = '') { target.innerHTML = message ? `<div class="state-card ${type}">${escapeHtml(message)}</div>` : ''; }
 
@@ -26,13 +38,17 @@
     if (!venues.length) { cards.innerHTML = '<div class="state-card">No venues are available in this city yet.</div>'; return; }
     cards.innerHTML = venues.map((venue, index) => {
       const distance = windowObject.GoHottGeo.formatDistance(venue.distance_meters); const saved = state.savedIds.has(venue.id);
-      return `<article class="venue-card"><button class="venue-main" type="button" data-venue="${escapeHtml(venue.id)}" aria-label="Open ${escapeHtml(venue.name)} details"><span class="rank">${String(index + 1).padStart(2, '0')}</span><span class="venue-info"><strong>${escapeHtml(venue.name)}</strong><span>${escapeHtml(venue.area || '')} · ${escapeHtml(venue.scene || 'Nightlife')}</span><em>● ${escapeHtml(venue.live_status)}${venue.line_note ? ` · ${escapeHtml(venue.line_note)}` : ''}${distance ? ` · ${distance}` : ''}</em></span><span class="score">${escapeHtml(venue.live_score)}<small>HOTT</small></span></button><button class="save-mini ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}" aria-label="${saved ? 'Unsave' : 'Save'} ${escapeHtml(venue.name)}">${saved ? '♥' : '♡'}</button></article>`;
+      return `<article class="venue-card"><button class="venue-main" type="button" data-venue="${escapeHtml(venue.id)}" aria-label="Open ${escapeHtml(venue.name)} details"><span class="rank">${String(index + 1).padStart(2, '0')}</span><span class="venue-info"><strong>${escapeHtml(venue.name)}${venue.is_verified ? ' <i class="verified-badge" aria-label="Verified venue data">✓</i>' : ''}</strong><span>${escapeHtml(venue.area || '')} · ${escapeHtml((venue.categories || [])[0] || venue.scene || 'Nightlife')}</span><em>● ${escapeHtml(venue.live_status)} · ${escapeHtml(venue.activity_label)}${distance ? ` · ${distance}` : ''}</em></span><span class="score">${escapeHtml(venue.live_score)}<small>HOTT</small></span></button><button class="save-mini ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}" aria-label="${saved ? 'Unsave' : 'Save'} ${escapeHtml(venue.name)}">${saved ? '♥' : '♡'}</button></article>`;
     }).join('');
+  }
+  function renderMarketSwitcher() {
+    const markets = state.markets.length ? state.markets : [{ name: 'Sarasota' }, { name: 'Tampa Bay' }];
+    el('#market-switcher').innerHTML = markets.map((market) => `<button class="city-button ${market.name === state.currentCity ? 'is-active' : ''}" type="button" data-city="${escapeHtml(market.name)}" aria-pressed="${market.name === state.currentCity}">${escapeHtml(market.name)}</button>`).join('');
   }
   async function loadVenues() {
     if (state.loading) return; state.loading = true; el('#fresh').textContent = 'Updating…'; el('#fresh').classList.remove('is-live'); el('#error-region').innerHTML = '';
     try {
-      const result = await windowObject.GoHottData.getVenuesWithRecentCheckIns(); state.checkIns = result.checkIns; state.venues = calculateLiveVenues(result.venues, result.checkIns);
+      const result = await windowObject.GoHottData.getVenuesWithRecentCheckIns(); state.checkIns = result.checkIns; state.markets = result.markets; state.venues = calculateLiveVenues(result.venues, result.checkIns); renderMarketSwitcher();
       if (result.checkInsError) console.warn('Recent crowd reports could not load.', result.checkInsError);
       renderDiscover(); el('#fresh').textContent = 'Live now'; el('#fresh').classList.add('is-live');
       const [hashRoute, hashId] = windowObject.location.hash.slice(1).split('/'); if (hashRoute === 'venue' && hashId && venueById(hashId)) openVenue(hashId);
@@ -53,10 +69,12 @@
     if (state.route === 'map') renderMap(); return state.position;
   }
   function renderMap() {
-    const venues = cityVenues(); windowObject.GoHottMap.render({ venues, city: state.currentCity, position: state.position, selectVenue: showMapPreview });
+    const venues = cityVenues(); const market = state.markets.find((item) => item.name === state.currentCity);
+    const center = market ? [market.center_latitude, market.center_longitude] : null;
+    windowObject.GoHottMap.render({ venues, city: state.currentCity, center, position: state.position, selectVenue: showMapPreview });
   }
   function showMapPreview(venue) {
-    const preview = el('#map-preview'); preview.hidden = false; preview.innerHTML = `<div><p class="eyebrow">${escapeHtml(venue.area)}</p><strong>${escapeHtml(venue.name)}</strong><span>● ${escapeHtml(venue.live_status)} · ${escapeHtml(venue.live_score)} HOTT</span></div><button class="secondary-button" type="button" data-venue="${escapeHtml(venue.id)}">View</button>`;
+    const preview = el('#map-preview'); preview.hidden = false; preview.innerHTML = `<div><p class="eyebrow">${escapeHtml(venue.area)} · VERIFIED DATA</p><strong>${escapeHtml(venue.name)}</strong><span>● ${escapeHtml(venue.live_status)} · ${escapeHtml(venue.live_score)} HOTT</span></div><button class="secondary-button" type="button" data-venue="${escapeHtml(venue.id)}">View</button>`;
   }
 
   function navigate(route, options = {}) {
@@ -70,7 +88,9 @@
   function renderVenueDetail(id) {
     const venue = venueById(id); if (!venue) return; state.currentVenue = venue;
     const reports = state.checkIns.filter((report) => String(report.venue_id) === String(id)).slice(0, 5); const saved = state.savedIds.has(venue.id); const distance = windowObject.GoHottGeo.formatDistance(venue.distance_meters);
-    el('#venue-detail').innerHTML = `<div class="detail-hero"><p class="eyebrow">${escapeHtml(venue.area || 'NIGHTLIFE')}</p><h1>${escapeHtml(venue.name)}</h1><p>${escapeHtml(venue.scene || 'Nightlife')}</p><div class="detail-score"><strong>${escapeHtml(venue.live_score)}</strong><span>GOHOTT SCORE<br>● ${escapeHtml(venue.live_status)}</span></div></div><div class="detail-actions"><button class="primary-button" type="button" data-check-in="${escapeHtml(venue.id)}">Report the vibe</button><button class="secondary-button ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}">${saved ? '♥ Saved' : '♡ Save'}</button></div><div class="detail-grid"><div><span>Area</span><strong>${escapeHtml(venue.area || 'Not listed')}</strong></div>${distance ? `<div><span>Distance</span><strong>${distance}</strong></div>` : ''}${venue.line_note ? `<div><span>Line</span><strong>${escapeHtml(venue.line_note)}</strong></div>` : ''}</div><section class="reports"><div class="section-heading"><div><p class="eyebrow">CROWD PULSE</p><h2>Recent reports</h2></div></div>${reports.length ? reports.map((report) => `<div class="report-row"><span>${report.crowd_level >= 4 ? '🔥' : report.crowd_level === 2 ? '🌙' : '💤'}</span><div><strong>${escapeHtml(report.vibe)}</strong><small>${escapeHtml(readableTime(report.created_at))}${report.user_id && report.proximity_status === 'client_nearby' ? ' · Device-estimated nearby' : ''}</small></div></div>`).join('') : '<div class="state-card">No recent crowd reports. Be the first tonight.</div>'}</section>`;
+    const hours = tonightHours(venue.hours); const categories = Array.isArray(venue.categories) ? venue.categories.join(' · ') : '';
+    const photoUrl = safeHttpsUrl(venue.photo_urls?.[0]); const websiteUrl = safeHttpsUrl(venue.website_url); const socialUrl = safeHttpsUrl(venue.social_url);
+    el('#venue-detail').innerHTML = `<div class="detail-hero">${photoUrl ? `<img class="venue-photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(venue.name)} venue">` : ''}<p class="eyebrow">${escapeHtml(venue.area || 'NIGHTLIFE')}${venue.is_verified ? ' · VERIFIED DATA' : ''}</p><h1>${escapeHtml(venue.name)}${venue.is_verified ? ' <i class="verified-badge" aria-label="Verified venue data">✓</i>' : ''}</h1><p>${escapeHtml(categories || venue.scene || 'Nightlife')}</p><div class="detail-score"><strong>${escapeHtml(venue.live_score)}</strong><span>GOHOTT SCORE<br>● ${escapeHtml(venue.live_status)}<br>${escapeHtml(venue.activity_label)}</span></div></div><div class="detail-actions"><button class="primary-button" type="button" data-check-in="${escapeHtml(venue.id)}">Report the vibe</button><button class="secondary-button ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}">${saved ? '♥ Saved' : '♡ Save'}</button></div><div class="detail-grid"><div><span>Area</span><strong>${escapeHtml(venue.area || 'Not listed')}</strong></div>${distance ? `<div><span>Distance</span><strong>${distance}</strong></div>` : ''}${hours ? `<div><span>Tonight</span><strong>${escapeHtml(hours)}</strong></div>` : ''}${venue.address ? `<div><span>Address</span><strong>${escapeHtml(venue.address)}</strong></div>` : ''}${venue.line_note ? `<div><span>Line</span><strong>${escapeHtml(venue.line_note)}</strong></div>` : ''}</div><div class="venue-links">${websiteUrl ? `<a class="venue-link" href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer">Official website ↗</a>` : ''}${socialUrl ? `<a class="venue-link" href="${escapeHtml(socialUrl)}" target="_blank" rel="noopener noreferrer">Official social ↗</a>` : ''}</div><section class="score-explainer"><strong>Why this score?</strong><span>Baseline ${escapeHtml(venue.hot_score || 50)} · Live activity ${venue.score_adjustment >= 0 ? '+' : ''}${escapeHtml(venue.score_adjustment)}</span></section><section class="reports"><div class="section-heading"><div><p class="eyebrow">CROWD PULSE</p><h2>Recent reports</h2></div></div>${reports.length ? reports.map((report) => `<div class="report-row"><span>${report.crowd_level >= 4 ? '🔥' : report.crowd_level === 2 ? '🌙' : '💤'}</span><div><strong>${escapeHtml(report.vibe)}</strong><small>${escapeHtml(readableTime(report.created_at))}${reportTrustLabel(report)}</small></div></div>`).join('') : '<div class="state-card">No recent crowd reports. Be the first tonight.</div>'}</section>`;
   }
 
   function openAuth(context = '') { lastFocusedElement = documentObject.activeElement; el('#auth-modal').hidden = false; documentObject.body.classList.add('modal-open'); el('#auth-message').textContent = context; setTimeout(() => el('#auth-form input').focus(), 0); }
@@ -101,20 +121,28 @@
   }
   async function renderProfile() {
     const container = el('#profile-content'); const currentUser = user(); if (!currentUser) { container.innerHTML = '<div class="state-card auth-required"><span>◉</span><h2>Your nights, remembered.</h2><p>Sign in to manage your profile and account activity.</p><button class="primary-button" type="button" data-open-auth>Sign in or create account</button></div>'; return; }
-    const [history] = await Promise.all([windowObject.GoHottData.getUserCheckIns(currentUser.id)]);
-    container.innerHTML = `<div class="profile-card"><div class="avatar-large">${escapeHtml((state.profile?.display_name || currentUser.email || 'G')[0].toUpperCase())}</div><div><strong>${escapeHtml(state.profile?.display_name || 'Night owl')}</strong><span>${escapeHtml(currentUser.email || '')}</span></div></div><form class="profile-form" id="profile-form"><label>Display name<input name="display_name" maxlength="60" value="${escapeHtml(state.profile?.display_name || '')}" placeholder="How friends see you"></label><label>Home city<select name="home_city"><option value="">Choose a city</option><option value="Sarasota" ${state.profile?.home_city === 'Sarasota' ? 'selected' : ''}>Sarasota</option><option value="Tampa Bay" ${state.profile?.home_city === 'Tampa Bay' ? 'selected' : ''}>Tampa Bay</option></select></label><button class="primary-button" type="submit">Save profile</button><p class="form-message" id="profile-message"></p></form><div class="profile-stats"><div><strong>${state.savedIds.size}</strong><span>Saved</span></div><div><strong>${history.length}</strong><span>Reports</span></div></div><section class="reports"><div class="section-heading"><div><p class="eyebrow">ACTIVITY</p><h2>Recent check-ins</h2></div></div>${history.length ? history.map((report) => { const venue = venueById(report.venue_id); return `<div class="report-row"><span>●</span><div><strong>${escapeHtml(venue?.name || 'Venue')}</strong><small>${escapeHtml(report.vibe)} · ${readableTime(report.created_at)}</small></div></div>`; }).join('') : '<div class="state-card">No account activity yet.</div>'}</section><button class="text-button danger" type="button" data-sign-out>Sign out</button>`;
+    const [history, deletionRequest] = await Promise.all([windowObject.GoHottData.getUserCheckIns(currentUser.id), windowObject.GoHottData.getAccountDeletionRequest(currentUser.id)]);
+    container.innerHTML = `<div class="profile-card"><div class="avatar-large">${escapeHtml((state.profile?.display_name || currentUser.email || 'G')[0].toUpperCase())}</div><div><strong>${escapeHtml(state.profile?.display_name || 'Night owl')}</strong><span>${escapeHtml(currentUser.email || '')}</span></div></div><form class="profile-form" id="profile-form"><label>Display name<input name="display_name" maxlength="60" value="${escapeHtml(state.profile?.display_name || '')}" placeholder="How friends see you"></label><label>Home city<select name="home_city"><option value="">Choose a city</option><option value="Sarasota" ${state.profile?.home_city === 'Sarasota' ? 'selected' : ''}>Sarasota</option><option value="Tampa Bay" ${state.profile?.home_city === 'Tampa Bay' ? 'selected' : ''}>Tampa Bay</option></select></label><button class="primary-button" type="submit">Save profile</button><p class="form-message" id="profile-message"></p></form><div class="profile-stats"><div><strong>${state.savedIds.size}</strong><span>Saved</span></div><div><strong>${history.length}</strong><span>Reports</span></div></div><section class="reports"><div class="section-heading"><div><p class="eyebrow">ACTIVITY</p><h2>Recent check-ins</h2></div></div>${history.length ? history.map((report) => { const venue = venueById(report.venue_id); return `<div class="report-row"><span>●</span><div><strong>${escapeHtml(venue?.name || 'Venue')}</strong><small>${escapeHtml(report.vibe)} · ${readableTime(report.created_at)}${reportTrustLabel(report)}</small></div></div>`; }).join('') : '<div class="state-card">No account activity yet.</div>'}</section><section class="privacy-card"><p class="eyebrow">PRIVACY</p><h2>Account controls</h2><p>Your profile and saved venues are private to your account. Phase 3 location-validation evidence is kept out of public venue feeds.</p>${deletionRequest ? `<div class="request-status">Deletion request: ${escapeHtml(deletionRequest.status)}</div>` : '<button class="text-button danger" type="button" data-request-deletion>Request account deletion</button>'}<p class="form-message" id="privacy-message" role="status"></p></section><button class="text-button" type="button" data-sign-out>Sign out</button>`;
   }
   async function saveProfile(form) { const data = new FormData(form); const message = el('#profile-message'); message.textContent = 'Saving…'; try { state.profile = await windowObject.GoHottData.saveProfile({ id: user().id, display_name: data.get('display_name').trim() || null, home_city: data.get('home_city') || null }); message.textContent = 'Profile saved.'; onAuthChanged(); } catch (error) { message.textContent = error.message; } }
+  async function requestDeletion() {
+    const message = el('#privacy-message'); if (!message) return;
+    if (!windowObject.confirm('Request account deletion? This records a request for a privileged backend process; it does not delete data immediately.')) return;
+    message.textContent = 'Submitting a deletion request…';
+    try { await windowObject.GoHottData.requestAccountDeletion(); message.textContent = 'Request received. A privileged backend process must complete deletion and session revocation.'; }
+    catch (error) { message.textContent = error.message; }
+  }
 
   async function openCheckIn(id) {
     state.currentVenue = venueById(id); if (!state.currentVenue) return; lastFocusedElement = documentObject.activeElement; el('#check-in-title').textContent = state.currentVenue.name; el('#check-in-message').textContent = ''; el('#check-in-modal').hidden = false; documentObject.body.classList.add('modal-open'); el('#trust-status').textContent = 'Checking whether you are nearby…'; el('#check-in-modal [data-level]').focus();
-    try { const position = state.position || await useLocation(); const assessment = windowObject.GoHottGeo.assess(position, state.currentVenue); el('#trust-status').textContent = assessment.status === 'client_nearby' ? `Device estimate: nearby · ${windowObject.GoHottGeo.formatDistance(assessment.distanceMeters)} away` : assessment.distanceMeters == null ? 'Venue coordinates unavailable · No proximity label will be shown' : `Device estimate: ${windowObject.GoHottGeo.formatDistance(assessment.distanceMeters)} away`; }
+    if (!user()) { el('#trust-status').textContent = 'Guest report · Sign in to add server-assessed proximity'; return; }
+    try { const position = state.position || await useLocation(); const assessment = windowObject.GoHottGeo.assess(position, state.currentVenue); el('#trust-status').textContent = assessment.status === 'client_nearby' ? `Location ready · ${windowObject.GoHottGeo.formatDistance(assessment.distanceMeters)} away` : assessment.distanceMeters == null ? 'Location or verified venue coordinates unavailable · Report will remain unassessed' : `${windowObject.GoHottGeo.formatDistance(assessment.distanceMeters)} away · The server will assess this report`; }
     catch { el('#trust-status').textContent = 'Location unavailable · You can still report the vibe'; }
   }
   function closeCheckIn() { el('#check-in-modal').hidden = true; documentObject.body.classList.remove('modal-open'); lastFocusedElement?.focus?.(); }
   async function submitCheckIn(button) {
     const currentUser = user(); const assessment = state.locationStatus === 'denied' ? { status: 'location_denied', distanceMeters: null } : windowObject.GoHottGeo.assess(state.position, state.currentVenue); const buttons = el('#check-in-modal').querySelectorAll('[data-level]'); buttons.forEach((item) => { item.disabled = true; }); el('#check-in-message').textContent = 'Sending your report…';
-    try { await windowObject.GoHottData.createCheckIn({ venue_id: state.currentVenue.id, crowd_level: Number(button.dataset.level), vibe: button.dataset.vibe, user_id: currentUser?.id || null, proximity_status: assessment.status, distance_meters: assessment.distanceMeters }); closeCheckIn(); await loadVenues(); }
+    try { await windowObject.GoHottData.createCheckIn({ venue_id: state.currentVenue.id, crowd_level: Number(button.dataset.level), vibe: button.dataset.vibe, user_id: currentUser?.id || null, proximity_status: assessment.status, distance_meters: assessment.distanceMeters, latitude: state.position?.latitude, longitude: state.position?.longitude, accuracy_meters: state.position?.accuracy }); closeCheckIn(); await loadVenues(); }
     catch (error) { el('#check-in-message').textContent = error.message; } finally { buttons.forEach((item) => { item.disabled = false; }); }
   }
 
@@ -128,7 +156,7 @@
     if (event.target.closest('[data-location]')) useLocation(); if (event.target.closest('[data-account]')) user() ? navigate('profile') : openAuth();
     if (event.target.closest('[data-open-auth]')) openAuth(); if (event.target.closest('[data-close-auth]')) closeAuth(); if (event.target.closest('[data-close-modal]')) closeCheckIn();
     if (event.target.closest('[data-toggle-auth]')) { state.authMode = state.authMode === 'signin' ? 'signup' : 'signin'; renderAuthMode(); el('#auth-message').textContent = ''; }
-    if (event.target.closest('[data-sign-out]')) windowObject.GoHottAuth.signOut(); if (event.target.closest('[data-back]')) navigate(state.previousRoute || 'discover');
+    if (event.target.closest('[data-sign-out]')) windowObject.GoHottAuth.signOut(); if (event.target.closest('[data-request-deletion]')) requestDeletion(); if (event.target.closest('[data-back]')) navigate(state.previousRoute || 'discover');
   });
   documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); });
   documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#check-in-modal').hidden) closeCheckIn(); } });

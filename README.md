@@ -4,15 +4,14 @@ GoHott answers one question: **Where should we go right now?** It is a mobile-fi
 
 ## Current product
 
-Phase 1 established the GoHott brand, live Supabase venue ranking, city switching, crowd reports, realtime refreshes, and an installable static PWA. Phase 2 adds:
+Phase 1 established the GoHott brand, live Supabase venue ranking, city switching, crowd reports, realtime refreshes, and an installable static PWA. Phase 2 added authentication, profiles, saves, maps, and location-assisted reports. Phase 3 now adds a production-oriented trust foundation:
 
-- Persistent Supabase email/password authentication without blocking guest browsing
-- User profiles, saved venues, and personal check-in history
-- Location-aware distance display and explicitly client-assessed proximity metadata
-- Repeated-report protection for authenticated users
-- Interactive Leaflet/OpenStreetMap experience with automatic venue markers when verified coordinates exist
-- Reusable venue detail screens with live status, score, line note, recent reports, Save, and Report actions
-- Functional Discover, Map, Saved, and Profile navigation
+- Curator-verified venue metadata layered over existing venue rows without overwriting them
+- Extensible market records with Sarasota/Tampa Bay compatibility fallbacks
+- A review-only server-controlled check-in RPC with session validation, cooldowns, distance assessment, and abuse signals
+- Recency/trust-weighted scoring with per-account deduplication, anonymous influence limits, and explainable adjustments
+- Private location-evidence/moderation architecture and user-owned account-deletion requests
+- Verified-coordinate-only map markers with graceful location/metadata fallbacks
 
 ## Architecture
 
@@ -26,10 +25,12 @@ GoHott remains a dependency-light static application compatible with Vercel.
 | `supabase.js` | Data queries, mutations, realtime, profiles, and saves |
 | `auth.js` | Persistent session, sign-up, sign-in, sign-out, and auth state |
 | `geo.js` | Permission-based geolocation, distance, and proximity assessment |
+| `ranking.js` | Explainable recency, trust, deduplication, and influence-capped ranking |
 | `map.js` | Leaflet map, OpenStreetMap tiles, venue markers, and user position |
 | `app.js` | Product state, scoring, navigation, views, and interaction orchestration |
 | `sw.js` | Versioned network-first app-shell cache |
 | `supabase/migrations/` | Additive database schema, grants, and RLS policies |
+| `docs/PHASE3_MIGRATION.md` | Phase 3 security review, rollout, and production configuration checklist |
 
 No framework or build step is required.
 
@@ -73,7 +74,13 @@ Required RLS model:
 - `profiles`: authenticated users can select, insert, and update only `id = auth.uid()`
 - `saved_venues`: authenticated users can select, insert, and delete only `user_id = auth.uid()`
 
-`proximity_status = 'client_nearby'` means only that a signed-in browser calculated a distance within the configured radius. It is advisory, user-controlled evidence—not cryptographic proof or server verification. Anonymous reports never submit or display that label. A future server-owned field and trusted function should validate location and incorporate device/account abuse signals before any report is called verified.
+`proximity_status = 'client_nearby'` means only that a signed-in browser calculated a distance within the configured radius. It is advisory, user-controlled evidence—not cryptographic proof or server verification. Anonymous reports never submit or display that label. Phase 3 introduces a separate server-owned assessment tier while preserving this field for compatibility.
+
+### Phase 3 migration
+
+`supabase/migrations/20260819171121_gohott_phase_3_trust_and_venue_data.sql` is additive and backward-compatible, but is **not applied by this branch**. It adds verified venue profiles, markets, protected check-in intake, private moderation/location evidence, and account-deletion request architecture. Review [the rollout checklist](docs/PHASE3_MIGRATION.md) and obtain explicit approval before any production application.
+
+The browser never assigns `trust_tier`. When Phase 3 is available, authenticated reports go through `submit_check_in_v3`; before it is available they fall back to Phase 2 behavior. Guest reporting remains a legacy/unassessed path.
 
 ## Location and map behavior
 
@@ -83,11 +90,13 @@ Leaflet uses OpenStreetMap's standard public tiles with required attribution and
 
 ## Scoring
 
-The Phase 1 algorithm is preserved: each venue starts with `hot_score` (default 50), reports from the previous two hours adjust it (`+3` Going Off, `+2` Pretty Busy, `-1` Chill, `-3` Dead), the adjustment is capped at ±15, and the final score is clamped from 0–100. Phase 2 records verification metadata but does not change report weighting yet.
+Each venue still starts with `hot_score` (default 50), uses the original crowd signals (`+3` Going Off, `+2` Pretty Busy, `-1` Chill, `-3` Dead), caps live adjustment at ±15, and clamps the final score from 0–100. Phase 3 adds transparent recency buckets, gives server-assessed reports more influence, ignores suspicious reports, counts only the newest report per account, and caps anonymous contribution. Venue details show the baseline and live adjustment.
 
 ## Deployment and PWA
 
 Deploy the repository root to Vercel as a static site with no build command. The manifest, icons, standalone metadata, relative paths, safe-area layout, and service worker are production-ready. The service worker uses a versioned, network-first strategy so new releases are not trapped behind stale cached code.
+
+`vercel.json` applies a restrictive content security policy, same-origin geolocation permission, clickjacking protection, MIME sniffing protection, and a strict referrer policy while allowing the pinned Supabase/Leaflet dependencies and Supabase API connections.
 
 After deploying, add the production and preview URLs to Supabase Auth redirect/site URL configuration, verify email templates, and test sign-up confirmation links.
 
@@ -97,14 +106,17 @@ After deploying, add the production and preview URLs to Supabase Auth redirect/s
 - Existing venues need legitimate coordinates before venue markers/distances can render.
 - Email confirmation depends on Supabase Auth project mail settings.
 - Guest check-ins remain for backward compatibility and are untrusted.
-- Proximity assessment and repeat throttling are client-assisted; robust anti-abuse enforcement needs server-side validation.
+- The Phase 3 migration requires explicit approval and staged verification before production application.
+- Server-assessed proximity still begins with client device coordinates; it is not cryptographic presence proof.
+- Expired private location evidence needs a separately configured retention job.
+- Account deletion requests need a privileged backend worker before they can complete Auth deletion and session revocation.
 - Public OpenStreetMap tiles are suitable for current light traffic; a production-scale tile strategy must follow the provider usage policy.
 
-## Phase 3 priorities
+## Phase 4 priorities
 
-1. Curate verified venue coordinates, addresses, hours, media, and data provenance.
-2. Add server-owned check-in validation, rate limiting, moderation, and trust weighting; only then introduce verified terminology.
-3. Add Google/Apple Auth after provider and redirect configuration.
-4. Add automated unit, browser, accessibility, and migration integration tests.
-5. Add observability, privacy controls, account deletion/export, analytics, and incident tooling.
-6. Evaluate a dedicated tile provider and Supabase Realtime Broadcast as traffic grows.
+1. Build privileged venue curation, claim review, and moderation operations with audit logging.
+2. Add stronger device-attestation/anti-sybil signals and server-side IP/device rate limiting with privacy review.
+3. Implement the deletion/retention workers and self-service data export.
+4. Add end-to-end migration tests against an isolated Supabase project and continuous browser/accessibility CI.
+5. Add observability, incident tooling, privacy analytics, and ranking-quality dashboards.
+6. Evaluate a production tile provider and Realtime Broadcast strategy as traffic grows.

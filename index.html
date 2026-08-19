@@ -30,7 +30,7 @@
       <section class="screen" data-screen="discover">
         <div class="hero">
           <div class="hero-top">
-            <div class="city-switcher" role="group" aria-label="Choose a city">
+            <div class="city-switcher" id="market-switcher" role="group" aria-label="Choose a city">
               <button class="city-button is-active" type="button" data-city="Sarasota" aria-pressed="true">Sarasota</button>
               <button class="city-button" type="button" data-city="Tampa Bay" aria-pressed="false">Tampa Bay</button>
             </div>
@@ -83,9 +83,9 @@
     <button class="modal-backdrop" type="button" data-close-modal aria-label="Close check-in"></button>
     <div class="sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-modal aria-label="Close">×</button>
       <p class="eyebrow">LIVE CROWD REPORT</p><h2 id="check-in-title">How's the vibe?</h2>
-      <p class="sheet-copy">Reports are freshest when you're at the venue.</p>
+      <p class="sheet-copy" id="check-in-help">Reports are freshest when you're at the venue. Location is used only for signed-in proximity assessment.</p>
       <div class="trust-status" id="trust-status">Checking location availability…</div>
-      <div class="vote-grid">
+      <div class="vote-grid" aria-describedby="check-in-help trust-status">
         <button type="button" data-level="5" data-vibe="GOING OFF"><span>🔥</span>Going off</button><button type="button" data-level="4" data-vibe="BUSY"><span>⚡</span>Pretty busy</button>
         <button type="button" data-level="2" data-vibe="CHILL"><span>🌙</span>Chill</button><button type="button" data-level="1" data-vibe="DEAD"><span>💤</span>Dead</button>
       </div><p class="form-message" id="check-in-message" role="status"></p>
@@ -95,7 +95,7 @@
   <div class="modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
     <button class="modal-backdrop" type="button" data-close-auth aria-label="Close sign in"></button>
     <div class="sheet auth-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-auth aria-label="Close">×</button>
-      <p class="eyebrow">WELCOME TO GOHOTT</p><h2 id="auth-title">Sign in</h2><p class="sheet-copy">Save venues, build a profile, and attach device-assessed proximity to reports.</p>
+      <p class="eyebrow">WELCOME TO GOHOTT</p><h2 id="auth-title">Sign in</h2><p class="sheet-copy">Save venues, build a profile, and submit proximity-assessed reports.</p>
       <form id="auth-form"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" minlength="6" autocomplete="current-password" required></label><button class="primary-button" type="submit">Sign in</button></form>
       <button class="text-button" type="button" data-toggle-auth>Create an account instead</button><p class="form-message" id="auth-message" role="status"></p>
     </div>
@@ -103,6 +103,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-  <script src="config.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="map.js"></script><script src="app.js"></script>
+  <script src="config.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
 </body>
 </html>
