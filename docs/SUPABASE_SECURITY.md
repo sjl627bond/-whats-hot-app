@@ -48,3 +48,13 @@ Confirm that no legacy policy grants `UPDATE` or `DELETE` to anonymous users. Pr
 The migration intentionally does not add any field called `verified` or `server_verified`. A future server-controlled function should own that state, revoke direct client writes to it, validate location evidence, and apply anti-abuse controls.
 
 Run Supabase database security/performance advisors after applying the migration, then test as both `anon` and two distinct authenticated users. User A must not be able to read or modify User B's profile or saved venues.
+
+## Phase 3 hardening
+
+Phase 3 moves authenticated check-ins to `submit_check_in_v3`. Direct browser grants no longer include trust, server-distance, accuracy, moderation, or proximity columns. The function derives the accepted vibe, validates the active Auth session, serializes concurrent user/venue submissions, enforces per-venue and global cooldowns, and writes private location evidence separately from public reports.
+
+The function is intentionally `SECURITY DEFINER` because clients cannot write protected result columns. Its empty `search_path`, fully qualified relations, explicit Auth/session checks, and narrowly granted `EXECUTE` permission are required controls. Review it again with database advisors before application.
+
+Venue verification remains an administrative decision: public RLS exposes only `venue_profiles.verification_status = 'verified'`, verified status requires coordinates and a timestamp, and browser roles cannot write venue profiles. The app does not backfill or promote legacy venue coordinates.
+
+See `docs/PHASE3_MIGRATION.md` for the complete approval and rollout checklist. Phase 3 must not be applied to production merely by merging the frontend PR.

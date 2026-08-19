@@ -4,8 +4,8 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(new URL('../supabase.js', `file://${__filename}`), 'utf8');
 
-function loadData(insertResults) {
-  const inserts = [];
+function loadData(insertResults, rpcResults = []) {
+  const inserts = []; const rpcCalls = [];
   const client = {
     from() {
       const query = {
@@ -20,6 +20,10 @@ function loadData(insertResults) {
       };
       return query;
     },
+    async rpc(name, payload) {
+      rpcCalls.push({ name, payload });
+      return rpcResults.shift() || { error: { message: 'Could not find the function submit_check_in_v3 in the schema cache' } };
+    },
     channel() { return { on() { return this; }, subscribe() { return this; } }; },
   };
   const window = {
@@ -32,7 +36,7 @@ function loadData(insertResults) {
     supabase: { createClient: () => client },
   };
   vm.runInNewContext(source, { window, Date, Promise, Error });
-  return { data: window.GoHottData, inserts };
+  return { data: window.GoHottData, inserts, rpcCalls };
 }
 
 async function run() {
@@ -50,6 +54,19 @@ async function run() {
   });
   assert.equal(beforeMigration.inserts.length, 2);
   assert.equal(JSON.stringify(beforeMigration.inserts[1]), JSON.stringify({ venue_id: 'venue-2', crowd_level: 2, vibe: 'CHILL' }));
+
+  const phaseThree = loadData([], [{ data: { trust_tier: 'server_assessed_nearby' }, error: null }]);
+  const result = await phaseThree.data.createCheckIn({
+    venue_id: 'venue-3', crowd_level: 4, vibe: 'BUSY', user_id: 'user-1',
+    latitude: 27.3364, longitude: -82.5307, accuracy_meters: 18.7,
+  });
+  assert.equal(result.trust_tier, 'server_assessed_nearby');
+  assert.equal(phaseThree.inserts.length, 0, 'authenticated Phase 3 reports must use the RPC');
+  assert.equal(phaseThree.rpcCalls[0].payload.p_accuracy_meters, 19);
+
+  const rateLimited = loadData([], [{ data: null, error: { message: 'Too many reports. Try again later.' } }]);
+  await assert.rejects(() => rateLimited.data.createCheckIn({ venue_id: 'venue-4', crowd_level: 5, vibe: 'GOING OFF', user_id: 'user-1' }), /Too many reports/);
+  assert.equal(rateLimited.inserts.length, 0, 'security rejections must never fall back to a direct insert');
   console.log('check-in compatibility tests passed');
 }
 
