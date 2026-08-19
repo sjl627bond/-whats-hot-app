@@ -60,6 +60,11 @@
         <div id="saved-content"><div class="loading"><span></span>Loading saves…</div></div>
       </section>
 
+      <section class="screen content-screen social-screen" data-screen="social" hidden>
+        <div class="screen-title"><div><p class="eyebrow">GOHOTT SOCIAL</p><h1>Your night network.</h1></div><button class="icon-button" type="button" data-social-notifications aria-label="Notifications">●</button></div>
+        <div id="social-content"><div class="loading"><span></span>Loading your network…</div></div>
+      </section>
+
       <section class="screen content-screen" data-screen="profile" hidden>
         <div class="screen-title"><div><p class="eyebrow">YOUR GOHOTT</p><h1>Profile.</h1></div></div>
         <div id="profile-content"></div>
@@ -75,6 +80,7 @@
       <button class="nav-item is-active" type="button" data-route="discover"><span aria-hidden="true">⌁</span>Discover</button>
       <button class="nav-item" type="button" data-route="map"><span aria-hidden="true">⌖</span>Map</button>
       <button class="nav-item" type="button" data-route="saved"><span aria-hidden="true">♡</span>Saved</button>
+      <button class="nav-item" type="button" data-route="social"><span aria-hidden="true">◎</span>Social</button>
       <button class="nav-item" type="button" data-route="profile"><span aria-hidden="true">◉</span>Profile</button>
     </nav>
   </div>
@@ -119,6 +125,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-  <script src="config.js"></script><script src="live-look.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
+  <script src="config.js"></script><script src="live-look.js"></script><script src="social.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
 </body>
 </html>

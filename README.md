@@ -13,7 +13,9 @@ Phase 1 established the GoHott brand, live Supabase venue ranking, city switchin
 - Private location-evidence/moderation architecture and user-owned account-deletion requests
 - Verified-coordinate-only map markers with graceful location/metadata fallbacks
 
-Phase 4 adds the review-ready **Live Look** foundation: temporary venue photos, camera/library upload, short-lived signed media, server-assessed proximity, owner removal, community reporting, moderation holds, and graceful behavior before its additive migration is enabled. The migration is included for review only and has not been applied to production.
+Phase 4 adds the production **Live Look** foundation: temporary venue photos, camera/library upload, short-lived signed media, server-assessed proximity, owner removal, community reporting, moderation holds, and private Storage. Its reviewed migration and hardening are applied in production.
+
+Phase 5 adds a migration-gated social foundation: richer profiles, people discovery, follow/block controls, privacy-safe nightlife plans, participant-only direct messages, native sharing, Live Look reactions, notifications, and social reporting. Discovery and all Phase 1–4 behavior continue to work before the Phase 5 migration is applied.
 
 ## Architecture
 
@@ -28,6 +30,7 @@ GoHott remains a dependency-light static application compatible with Vercel.
 | `auth.js` | Persistent session, sign-up, sign-in, sign-out, and auth state |
 | `geo.js` | Permission-based geolocation, distance, and proximity assessment |
 | `live-look.js` | Live Look file/caption validation, hashing, and time labels |
+| `social.js` | Social validation, plan/privacy constants, and native share fallback |
 | `ranking.js` | Explainable recency, trust, deduplication, and influence-capped ranking |
 | `map.js` | Leaflet map, OpenStreetMap tiles, venue markers, and user position |
 | `app.js` | Product state, scoring, navigation, views, and interaction orchestration |
@@ -35,6 +38,7 @@ GoHott remains a dependency-light static application compatible with Vercel.
 | `supabase/migrations/` | Additive database schema, grants, and RLS policies |
 | `docs/PHASE3_MIGRATION.md` | Phase 3 security review, rollout, and production configuration checklist |
 | `docs/PHASE4_MIGRATION.md` | Live Look Storage, RLS, privacy, cleanup, and rollout checklist |
+| `docs/PHASE5_MIGRATION.md` | Social schema, RLS, privacy, Realtime, and staged rollout checklist |
 
 No framework or build step is required.
 
@@ -115,14 +119,15 @@ After deploying, add the production and preview URLs to Supabase Auth redirect/s
 - Expired private location evidence needs a separately configured retention job.
 - Account deletion requests need a privileged backend worker before they can complete Auth deletion and session revocation.
 - Public OpenStreetMap tiles are suitable for current light traffic; a production-scale tile strategy must follow the provider usage policy.
-- Live Look stays disabled until the Phase 4 migration and private Storage policies receive review and explicit approval.
+- Live Look is enabled in production; privileged retention and moderator operations remain separate backend responsibilities.
+- Phase 5 social writes remain disabled until its additive migration receives explicit approval and is applied.
 - “Until close” is capped at four hours and safely falls back to 60 minutes until verified structured venue hours are populated.
-- A privileged retention worker and moderator console are required before Live Look production enablement.
+- A privileged retention worker and moderator console are still required for production operations at scale.
 
 ## Next priorities
 
-1. Review and stage the Phase 4 migration, then build privileged moderation and retention workers.
-2. Add self-service data export and complete media cleanup in account deletion.
-3. Add edge-level abuse signals and rate limiting with a privacy review.
-4. Add end-to-end isolated-Supabase and mobile-browser CI.
-5. Add privacy-safe observability and evaluate production map tiles/Realtime Broadcast at scale.
+1. Review the Phase 5 migration in an isolated Supabase project and build moderator tooling.
+2. Add self-service data export and complete social/media cleanup in account deletion.
+3. Move high-volume private events to authenticated Realtime Broadcast channels.
+4. Add edge-level abuse signals, message rate limits, and privacy-safe observability.
+5. Add end-to-end isolated-Supabase and multi-browser CI.
