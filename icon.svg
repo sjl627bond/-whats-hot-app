@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">GoHott flame icon</title>
+  <rect width="512" height="512" fill="#09090b"/>
+  <path fill="#ff5315" d="M276 72c14 77-28 102-12 144 9 23 31 35 47 53 17 18 27 43 27 70 0 57-39 101-90 101s-90-44-90-101c0-55 36-83 64-119 24-31 42-72 54-148Z"/>
+  <path fill="#ff9a69" d="M253 266c6 34-15 47-8 67 4 10 14 17 21 25 8 8 12 19 12 31 0 22-14 39-33 39s-34-17-34-39c0-21 14-33 24-47 9-13 15-30 18-76Z"/>
+  <text x="256" y="350" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="92" font-weight="900" text-anchor="middle" letter-spacing="-8">GH</text>
+</svg>
