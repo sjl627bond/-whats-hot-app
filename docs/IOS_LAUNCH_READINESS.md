@@ -26,6 +26,7 @@ The Phase 6 web app is now packaged with Capacitor 8. The native shell preserves
 - The native build vendors the exact pinned Supabase JS and Leaflet releases instead of depending on CDN availability. A cold offline launch can render GoHott's shell and truthful unavailable states; live data and map tiles still require network access.
 - Simulator camera-unavailable errors fall back to the Photos picker. Location denial/restriction is normalized into the existing optional-location fallback, and reconnecting refreshes live venue data.
 - The existing Supabase client continues to persist sessions inside the app's WKWebView sandbox and refreshes them only while active. Sign-out remains local-session revocation. No service-role or APNs secret is present.
+- Profile → Settings & Privacy now performs an explicit destructive-action confirmation and password reauthentication before invoking the JWT-protected `delete-account` Edge Function. The function revalidates the user, accepts no account identifier, requires a token issued within ten minutes, removes only that user’s `live-looks` objects, anonymizes direct-conversation keys, and deletes the Auth user so foreign-key cascades complete account cleanup. The client clears its local session only after the server reports success.
 - `App.entitlements.example` and `PrivacyInfo.xcprivacy.example` are review templates only. They are intentionally not build-linked until the real App ID/domain and verified privacy inventory are supplied.
 
 ## Local commands
@@ -49,7 +50,7 @@ Full Xcode is required. Command Line Tools alone cannot resolve/build the iOS ta
 5. Configure APNs in a server environment; never place an APNs key, Supabase service-role key, or moderation credential in the app.
 6. Configure universal links and verify cold start, warm start, signed-out routing, missing/deleted content, and web fallback.
 7. Exercise camera/library denial, limited Photos access, location denial/revocation, offline launch, poor network, session expiry, account deletion, data export, blocks, reports, and notification privacy on physical devices.
-8. Deploy and validate the protected account-deletion worker. The app now provides authenticated initiation and explicit confirmation, while the existing request table derives ownership from `auth.uid()` and prevents clients from selecting another user. The worker must revoke sessions, remove Storage objects before deleting the Auth user, perform the documented cascade/retention review, and record completion without exposing a service-role or secret key to the app. Also provide published moderation response processes and reviewer test credentials.
+8. Deploy and validate the reviewed `delete-account` Edge Function with JWT verification enabled. Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to the function environment; the secret must never be copied into client configuration. Exercise success, stale-session, Storage failure/retry, and cross-user isolation with disposable non-production accounts. Also provide published moderation response processes and reviewer test credentials.
 9. Produce signed Release archive, upload symbols, complete App Privacy answers from a verified data inventory, add screenshots for current iPhone sizes, and run TestFlight internal then external review.
 10. Submit only after Supabase advisors, browser/native regression, accessibility, retention jobs, incident response, backups, and production observability pass.
 
@@ -61,3 +62,11 @@ Full Xcode is required. Command Line Tools alone cannot resolve/build the iOS ta
 - APNs key strategy and private notification-provider/backend configuration. APNs keys and device tokens must never be committed or logged; the app currently registers only after a user taps notification settings and does not upload a token.
 - App Store Connect app record, legal entity/seller name, SKU, support URL, privacy-policy URL, contact information, category, age rating, reviewer account, privacy questionnaire answers, and export-compliance determination.
 - Final app icon/launch artwork and screenshots. The generated Capacitor placeholder artwork is not release artwork.
+
+## Account deletion data handling
+
+Before removing the Auth user, the worker inventories `live_looks.storage_path` for the verified user, rejects any path outside that user’s UUID prefix, and removes those objects through the Storage API. It anonymizes direct-conversation keys while preserving messages authored by the other participant. Hard Auth deletion then uses existing foreign keys to remove the profile, saved venues, venue claims, deletion/export requests, push-device rows, location evidence, Live Looks and reports, follows, blocks, conversation participation, messages authored by the deleted user, plans, reactions, received notifications, and reports submitted by that user.
+
+Check-ins and sanitized client-error rows are retained with `user_id` set to null. Venue owner/verifier references, moderation audit actors, and notification actors are also set to null. Moderation reports submitted by other users and references inside content owned by other users may be retained for safety, integrity, and abuse review; they are not exposed as deleted-user profile data. Supabase backups remain subject to the operator’s documented backup-retention period.
+
+Storage removal happens before Auth deletion because Supabase refuses to delete users who still own Storage objects. A required cleanup failure returns an error, keeps the request retryable, and never reports success. Logs contain a random operation ID and failure stage only—not credentials, user IDs, message bodies, media paths, or other private content.

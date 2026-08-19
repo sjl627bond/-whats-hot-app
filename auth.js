@@ -32,9 +32,20 @@
     const { error } = await client.auth.signOut({ scope: 'local' });
     if (error) throw new Error(error.message);
   }
+  async function reauthenticate(password) {
+    const currentUser = session?.user;
+    if (!currentUser?.id || !currentUser.email) throw new Error('Sign in again before deleting your account.');
+    const { data, error } = await client.auth.signInWithPassword({ email: currentUser.email, password });
+    if (error || data?.user?.id !== currentUser.id) throw new Error('Your password could not be verified.');
+    session = data.session || session; notify();
+  }
+  async function completeAccountDeletion() {
+    try { await client.auth.signOut({ scope: 'local' }); } catch { /* The server may already have removed the Auth user. */ }
+    session = null; notify();
+  }
   function subscribe(listener) { listeners.add(listener); listener(session); return () => listeners.delete(listener); }
   function getSession() { return session; }
   function getUser() { return session?.user || null; }
 
-  windowObject.GoHottAuth = Object.freeze({ initialise, signIn, signUp, signOut, subscribe, getSession, getUser });
+  windowObject.GoHottAuth = Object.freeze({ initialise, signIn, signUp, signOut, reauthenticate, completeAccountDeletion, subscribe, getSession, getUser });
 }(window));

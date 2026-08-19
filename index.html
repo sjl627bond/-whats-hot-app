@@ -122,6 +122,7 @@
         <p>Check-ins may remain without your account identifier. Safety, fraud-prevention, legal, and limited backup records may be retained or de-identified where required.</p>
       </div>
       <form id="delete-account-form">
+        <label class="deletion-password">Current password<input type="password" name="password" minlength="6" autocomplete="current-password" required></label>
         <label class="confirmation-check"><input type="checkbox" name="confirmed" required> <span>I understand this is a deletion request and that completed deletion cannot be undone.</span></label>
         <button class="primary-button danger-button" type="submit" disabled>Submit deletion request</button>
         <button class="text-button" type="button" data-close-deletion>Keep my account</button>

@@ -5,13 +5,13 @@ const vm = require('node:vm');
 const code = fs.readFileSync(new URL('../auth.js', `file://${__filename}`), 'utf8');
 const appStateListeners = {};
 const authStateListeners = [];
-let activeSession = { user: { id: 'user-a' }, access_token: 'test-only' };
+let activeSession = { user: { id: 'user-a', email: 'user-a@example.test' }, access_token: 'test-only' };
 let started = 0; let stopped = 0; let signOutScope = null;
 const auth = {
   getSession: async () => ({ data: { session: activeSession }, error: null }),
   onAuthStateChange: (callback) => { authStateListeners.push(callback); },
   startAutoRefresh: () => { started += 1; }, stopAutoRefresh: () => { stopped += 1; },
-  signInWithPassword: async ({ email }) => email === 'bad@example.test' ? { error: new Error('Invalid login credentials') } : { error: null },
+  signInWithPassword: async ({ email }) => email === 'bad@example.test' ? { error: new Error('Invalid login credentials') } : { data: { user: activeSession.user, session: activeSession }, error: null },
   signUp: async () => ({ data: { session: null }, error: null }),
   signOut: async ({ scope }) => { signOutScope = scope; return { error: null }; },
 };
@@ -29,14 +29,18 @@ vm.runInNewContext(code, { window, console });
 
   appStateListeners['gohott:native-app-state']({ detail: { isActive: false } });
   assert.equal(stopped, 1);
-  activeSession = { user: { id: 'user-b' } };
+  activeSession = { user: { id: 'user-b', email: 'user-b@example.test' } };
   appStateListeners['gohott:native-app-state']({ detail: { isActive: true } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(started, 1); assert.equal(window.GoHottAuth.getUser().id, 'user-b');
 
   await assert.rejects(window.GoHottAuth.signIn('bad@example.test', 'invalid'), /Invalid login credentials/);
   assert.equal((await window.GoHottAuth.signUp('new@example.test', 'password')).needsConfirmation, true);
+  await window.GoHottAuth.reauthenticate('correct-password');
   await window.GoHottAuth.signOut(); assert.equal(signOutScope, 'local');
+
+  await window.GoHottAuth.completeAccountDeletion();
+  assert.equal(window.GoHottAuth.getSession(), null, 'successful deletion must clear the local session');
 
   authStateListeners[0]('SIGNED_OUT', null);
   assert.equal(window.GoHottAuth.getSession(), null);

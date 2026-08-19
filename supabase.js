@@ -100,16 +100,13 @@
   async function getAccountDeletionRequest(userId) {
     const result = await client.from('account_deletion_requests').select('status,requested_at').eq('user_id', userId).maybeSingle();
     if (result.error) return null;
-    return result.data;
+    return result.data?.status === 'processing' ? result.data : null;
   }
-  async function requestAccountDeletion(reason = null) {
+  async function requestAccountDeletion() {
     const currentUser = windowObject.GoHottAuth?.getUser?.();
     if (!currentUser?.id) throw new Error('Sign in to request account deletion.');
-    const result = await client.from('account_deletion_requests').insert({ reason: reason || null }).select('status,requested_at').single();
-    if (result.error) {
-      if (result.error.code === '23505') throw new Error('An account deletion request is already pending.');
-      throw new Error('Account deletion requests require the Phase 3 database migration.');
-    }
+    const result = await client.functions.invoke('delete-account', { body: { confirmation: true } });
+    if (result.error || !result.data?.deleted) throw new Error(result.data?.error || 'Account deletion could not be completed. Please retry.');
     return result.data;
   }
   async function requestDataExport() {

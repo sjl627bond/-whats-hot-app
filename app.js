@@ -199,15 +199,15 @@
   function openDeletion() {
     if (!user()) return openAuth('Sign in to manage account deletion.');
     lastFocusedElement = documentObject.activeElement; const modal = el('#delete-account-modal'); const form = el('#delete-account-form');
-    form.reset(); form.querySelector('[type="submit"]').disabled = true; el('#deletion-message').textContent = ''; modal.hidden = false; documentObject.body.classList.add('modal-open'); form.elements.confirmed.focus();
+    form.reset(); form.querySelector('[type="submit"]').disabled = true; el('#deletion-message').textContent = ''; modal.hidden = false; documentObject.body.classList.add('modal-open'); form.elements.password.focus();
   }
   function closeDeletion() { el('#delete-account-modal').hidden = true; documentObject.body.classList.remove('modal-open'); lastFocusedElement?.focus?.(); }
   async function requestDeletion(form) {
     const message = el('#deletion-message'); const submit = form.querySelector('[type="submit"]');
     if (!user()) { message.textContent = 'Your session has expired. Sign in again to request deletion.'; return; }
     if (!form.elements.confirmed.checked) { message.textContent = 'Confirm that you understand before continuing.'; return; }
-    submit.disabled = true; message.textContent = 'Submitting a deletion request…';
-    try { await windowObject.GoHottData.requestAccountDeletion(); message.textContent = 'Request received. A protected backend worker must verify identity, revoke sessions, and complete deletion.'; setTimeout(() => { closeDeletion(); renderProfile(); }, 900); }
+    submit.disabled = true; message.textContent = 'Verifying your identity…';
+    try { await windowObject.GoHottAuth.reauthenticate(form.elements.password.value); message.textContent = 'Deleting your account and associated data…'; await windowObject.GoHottData.requestAccountDeletion(); message.textContent = 'Account deleted. Signing out…'; await windowObject.GoHottAuth.completeAccountDeletion(); setTimeout(() => { closeDeletion(); navigate('discover'); }, 700); }
     catch (error) { message.textContent = error.message; submit.disabled = false; }
   }
   async function signOut(button) { const message = el('#privacy-message'); button.disabled = true; if (message) message.textContent = 'Signing out…'; try { await windowObject.GoHottAuth.signOut(); } catch (error) { if (message) message.textContent = error.message; button.disabled = false; } }

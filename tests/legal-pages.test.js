@@ -23,8 +23,8 @@ const terms = read('terms.html');
 for (const phrase of ['Acceptable use', 'User-generated content', 'Venue and ranking', 'Moderation', 'intellectual property', 'termination', 'Disclaimers', 'Limitation of liability']) assert.match(terms, new RegExp(phrase, 'i'));
 
 const choices = read('privacy-choices.html');
-assert.match(choices, /Profile.*Account controls/is);
-assert.match(choices, /not immediate/i);
+assert.match(choices, /Profile.*Settings.*Privacy/is);
+assert.match(choices, /not deployed/i);
 assert.match(choices, /de-identified form/i);
 
 const app = read('app.js');

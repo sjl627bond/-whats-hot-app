@@ -133,7 +133,7 @@ After deploying, add the production and preview URLs to Supabase Auth redirect/s
 ## Next priorities
 
 1. Review the Phase 5 migration in an isolated Supabase project and build moderator tooling.
-2. Add self-service data export and complete social/media cleanup in account deletion.
+2. Deploy and validate the implemented account-deletion Edge Function with disposable users, and complete the self-service data-export worker.
 3. Move high-volume private events to authenticated Realtime Broadcast channels.
 4. Add edge-level abuse signals, message rate limits, and privacy-safe observability.
 5. Add end-to-end isolated-Supabase and multi-browser CI.
