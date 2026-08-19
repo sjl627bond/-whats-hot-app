@@ -110,6 +110,14 @@
     }
     return result.data;
   }
+  async function requestDataExport() {
+    const result = await client.rpc('request_user_data_export');
+    if (result.error) {
+      if (/request_user_data_export|schema cache|PGRST202/i.test(result.error.message || '')) throw new Error('Data export will be available after the reviewed Phase 6 migration and export worker are configured.');
+      throw new Error(result.error.message || 'Your export request could not be submitted.');
+    }
+    return result.data;
+  }
   function subscribeToCheckIns(onChange, onStatus) {
     return client.channel('gohott-live-check-ins').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'check_ins' }, onChange).subscribe(onStatus);
   }
@@ -175,5 +183,5 @@
     return () => { client.removeChannel(notifications); if (messages) client.removeChannel(messages); };
   }
 
-  windowObject.GoHottData = Object.freeze({ client, getVenuesWithRecentCheckIns, createCheckIn, getSavedVenueIds, saveVenue, unsaveVenue, getProfile, saveProfile, getUserCheckIns, getAccountDeletionRequest, requestAccountDeletion, subscribeToCheckIns, getActiveLiveLooks, uploadLiveLook, removeLiveLook, reportLiveLook, subscribeToLiveLooks, searchPeople, listConnections, setFollow, setBlock, startConversation, getConversations, getMessages, sendMessage, markConversationRead, setNightlifePlan, getVenuePlanSignal, reactToLiveLook, getNotifications, markNotificationsRead, reportSocialContent, subscribeToSocial });
+  windowObject.GoHottData = Object.freeze({ client, getVenuesWithRecentCheckIns, createCheckIn, getSavedVenueIds, saveVenue, unsaveVenue, getProfile, saveProfile, getUserCheckIns, getAccountDeletionRequest, requestAccountDeletion, requestDataExport, subscribeToCheckIns, getActiveLiveLooks, uploadLiveLook, removeLiveLook, reportLiveLook, subscribeToLiveLooks, searchPeople, listConnections, setFollow, setBlock, startConversation, getConversations, getMessages, sendMessage, markConversationRead, setNightlifePlan, getVenuePlanSignal, reactToLiveLook, getNotifications, markNotificationsRead, reportSocialContent, subscribeToSocial });
 }(window));

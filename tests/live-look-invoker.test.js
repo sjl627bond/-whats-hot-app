@@ -1,0 +1,14 @@
+const assert = require('node:assert/strict'); const fs = require('node:fs');
+const sql = fs.readFileSync(new URL('../supabase/migrations/20260819234500_gohott_phase_6_live_look_invoker_fix.sql', `file://${__filename}`), 'utf8');
+assert.doesNotMatch(sql, /\b(delete|update|insert|truncate|drop|alter table)\b/i);
+assert.match(sql, /function public\.get_active_live_looks\(\)[\s\S]+security invoker/i);
+assert.doesNotMatch(sql, /get_active_live_looks\(\)[\s\S]+security definer/i);
+assert.match(sql, /live_look_access_for_current_user[\s\S]+security definer set search_path=''/i);
+assert.match(sql, /lateral public\.live_look_access_for_current_user\(l\.id\)/i);
+assert.doesNotMatch(sql, /get_active_live_looks[\s\S]+l\.(user_id|moderation_state|removed_at)/i, 'invoker listing must not read private columns');
+assert.match(sql, /revoke select\(user_id\) on public\.live_looks from anon, authenticated/i);
+assert.match(sql, /revoke select\(moderation_state,removed_at\) on public\.live_looks from anon, authenticated/i);
+assert.match(sql, /revoke all on function public\.live_look_access_for_current_user\(uuid\) from public, anon, authenticated/i);
+assert.match(sql, /grant execute on function public\.live_look_access_for_current_user\(uuid\) to anon, authenticated/i);
+assert.match(sql, /moderation_state='approved'[\s\S]+published_at is not null[\s\S]+expires_at>now\(\)/i);
+console.log('Live Look invoker security regression tests passed');

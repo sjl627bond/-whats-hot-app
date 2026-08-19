@@ -1,5 +1,5 @@
-const CACHE_NAME = 'gohott-shell-v5-1';
-const APP_SHELL = ['./', './index.html', './styles.css', './config.js', './live-look.js', './social.js', './supabase.js', './auth.js', './geo.js', './ranking.js', './map.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE_NAME = 'gohott-shell-v6-1';
+const APP_SHELL = ['./', './index.html', './offline.html', './privacy.html', './terms.html', './styles.css', './mobile.css', './config.js', './mobile.js', './observability.js', './live-look.js', './social.js', './supabase.js', './auth.js', './geo.js', './ranking.js', './map.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
@@ -9,7 +9,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
   // Network-first keeps releases fresh; the cache is only a resilient fallback.
-  event.respondWith(fetch(event.request).then((response) => {
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('network timeout')), 8000));
+  event.respondWith(Promise.race([fetch(event.request), timeout]).then((response) => {
     const copy = response.clone(); caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)); return response;
-  }).catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html'))));
+  }).catch(() => caches.match(event.request).then((cached) => cached || (event.request.mode === 'navigate' ? caches.match('./offline.html') : Response.error()))));
 });

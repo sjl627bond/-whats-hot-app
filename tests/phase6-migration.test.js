@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict'); const fs = require('node:fs');
+const sql = fs.readFileSync(new URL('../supabase/migrations/20260819233000_gohott_phase_6_launch_readiness.sql', `file://${__filename}`), 'utf8');
+assert.doesNotMatch(sql, /\b(drop|truncate|delete\s+from|update\s+public\.|alter\s+(column|type)|rename\s+to)\b/i);
+assert.equal((sql.match(/create table if not exists public\./gi) || []).length, 3);
+assert.equal((sql.match(/enable row level security/gi) || []).length, 3);
+assert.equal((sql.match(/create policy/gi) || []).length, 1);
+assert.match(sql, /create policy "users read own export requests"[\s\S]+to authenticated[\s\S]+auth\.uid\(\)\)=user_id/i);
+assert.match(sql, /revoke all on public\.user_data_export_requests from anon, authenticated/i);
+assert.match(sql, /grant select on public\.user_data_export_requests to authenticated/i);
+assert.doesNotMatch(sql, /grant (insert|update|delete|all)[\s\S]+to (anon|authenticated)/i);
+assert.match(sql, /revoke all on function public\.request_user_data_export\(\) from public, anon/i);
+assert.match(sql, /grant execute on function public\.request_user_data_export\(\) to authenticated/i);
+assert.match(sql, /security definer set search_path=''/i);
+assert.equal((sql.match(/create (or replace )?trigger/gi) || []).length, 0, 'Phase 6 must not add implicit data-changing triggers');
+assert.equal((sql.match(/alter publication|realtime\.messages/gi) || []).length, 0, 'private Phase 6 tables must not be added to Realtime');
+console.log('Phase 6 migration safety contracts passed');

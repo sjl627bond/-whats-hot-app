@@ -131,3 +131,9 @@ After deploying, add the production and preview URLs to Supabase Auth redirect/s
 3. Move high-volume private events to authenticated Realtime Broadcast channels.
 4. Add edge-level abuse signals, message rate limits, and privacy-safe observability.
 5. Add end-to-end isolated-Supabase and multi-browser CI.
+
+## Phase 6 launch-readiness
+
+Phase 6 adds iPhone safe-area and compact-viewport behavior, resilient offline navigation, permission rationale, deep-link routing, privacy/legal entry points, data-export and notification foundations, sanitized observability, and an additive review-only backend migration. The recommended native strategy is a thin Capacitor iOS shell over the existing PWA and Supabase architecture; see `docs/IOS_LAUNCH_READINESS.md` and `docs/PHASE6_OPERATIONS.md`.
+
+The Phase 6 migration is not applied automatically. Export, deletion, notification, retention, moderation, and telemetry processing require privileged server workers and explicit production approval. The web client contains no service-role, APNs, or private credentials.

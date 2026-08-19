@@ -14,9 +14,12 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="mobile.css">
   <title>GoHott — Where to go right now</title>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="network-banner" id="network-banner" role="status" hidden>You’re offline. GoHott is showing saved app content; live activity may be stale.</div>
   <div class="app">
     <header class="app-header">
       <a class="brand" href="#discover" data-route="discover" aria-label="GoHott home">GO<span>HOTT</span></a>
@@ -26,7 +29,7 @@
       </div>
     </header>
 
-    <main>
+    <main id="main-content">
       <section class="screen" data-screen="discover">
         <div class="hero">
           <div class="hero-top">
@@ -44,7 +47,7 @@
           <div class="section-heading"><div><p class="eyebrow">THE HOTT LIST</p><h2 id="trending-heading">Trending now</h2></div><span class="freshness" id="fresh" role="status">Connecting…</span></div>
           <div class="notice" id="location-notice" hidden></div>
           <div id="error-region" aria-live="polite"></div>
-          <div id="venue-cards" aria-live="polite"><div class="loading"><span></span>Finding the energy…</div></div>
+          <div id="venue-cards" aria-live="polite"><div class="skeleton" aria-label="Loading venues"></div><div class="skeleton" aria-hidden="true"></div><div class="skeleton" aria-hidden="true"></div></div>
         </section>
       </section>
 
@@ -84,6 +87,8 @@
       <button class="nav-item" type="button" data-route="profile"><span aria-hidden="true">◉</span>Profile</button>
     </nav>
   </div>
+
+  <footer class="legal-footer"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><button type="button" data-privacy-settings>Privacy settings</button></footer>
 
   <div class="modal" id="check-in-modal" role="dialog" aria-modal="true" aria-labelledby="check-in-title" hidden>
     <button class="modal-backdrop" type="button" data-close-modal aria-label="Close check-in"></button>
@@ -125,6 +130,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-  <script src="config.js"></script><script src="live-look.js"></script><script src="social.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
+  <script src="config.js"></script><script src="mobile.js"></script><script src="observability.js"></script><script src="live-look.js"></script><script src="social.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
 </body>
 </html>
