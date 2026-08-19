@@ -1,0 +1,17 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const migration = fs.readFileSync(new URL('../supabase/migrations/20260819203000_gohott_phase_4_live_looks.sql', `file://${__filename}`), 'utf8');
+const browser = ['live-look.js', 'supabase.js', 'app.js'].map((file) => fs.readFileSync(new URL(`../${file}`, `file://${__filename}`), 'utf8')).join('\n');
+assert.doesNotMatch(migration, /\b(delete\s+from|truncate|drop\s+table|drop\s+column)\b/i);
+assert.match(migration, /'live-looks','live-looks',false,8388608/);
+assert.match(migration, /storage\.foldername\(name\).*auth\.uid/s);
+assert.match(migration, /moderation_state='approved'.*expires_at>now\(\)/s);
+assert.match(migration, /p_accuracy_meters>250/);
+assert.match(migration, /v_distance>500/);
+assert.match(migration, /auth\.sessions/);
+assert.match(migration, /v_count>=3.*pending_review/s);
+assert.match(migration, /expires_at timestamptz not null default \(now\(\) \+ interval '24 hours'\)/);
+assert.doesNotMatch(browser, /(service[_-]?role|supabase_service|secret_key)/i);
+assert.doesNotMatch(browser, /moderation_state\s*:/i);
+assert.doesNotMatch(browser, /proximity_assessment\s*:/i);
+console.log('Phase 4 security contract tests passed');

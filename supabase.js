@@ -109,5 +109,29 @@
     return client.channel('gohott-live-check-ins').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'check_ins' }, onChange).subscribe(onStatus);
   }
 
-  windowObject.GoHottData = Object.freeze({ client, getVenuesWithRecentCheckIns, createCheckIn, getSavedVenueIds, saveVenue, unsaveVenue, getProfile, saveProfile, getUserCheckIns, getAccountDeletionRequest, requestAccountDeletion, subscribeToCheckIns });
+  function liveLooksUnavailable(error) { return /live_looks|get_active_live_looks|prepare_live_look|publish_live_look|schema cache|PGRST/i.test(error?.message || ''); }
+  async function getActiveLiveLooks() {
+    const result = await client.rpc('get_active_live_looks');
+    if (result.error) { if (liveLooksUnavailable(result.error)) return { available: false, looks: [] }; throw result.error; }
+    const looks = await Promise.all((result.data || []).map(async (look) => {
+      let signed = await client.storage.from('live-looks').createSignedUrl(look.storage_path, 300, { transform: { width: 960, quality: 78, resize: 'contain' } });
+      if (signed.error) signed = await client.storage.from('live-looks').createSignedUrl(look.storage_path, 300);
+      return { ...look, image_url: signed.data?.signedUrl || '' };
+    }));
+    return { available: true, looks: looks.filter((look) => look.image_url) };
+  }
+  async function uploadLiveLook({ venueId, file, caption, durationChoice, position }) {
+    const details = windowObject.GoHottLiveLook.validateFile(file); const contentHash = await windowObject.GoHottLiveLook.fingerprint(file);
+    const prepared = await client.rpc('prepare_live_look_upload', { p_venue_id: venueId, p_content_type: details.contentType, p_byte_size: details.byteSize, p_extension: details.extension, p_content_hash: contentHash });
+    if (prepared.error) throw new Error(liveLooksUnavailable(prepared.error) ? 'Live Look is awaiting its reviewed Phase 4 database rollout.' : prepared.error.message);
+    const upload = await client.storage.from('live-looks').upload(prepared.data.path, file, { contentType: details.contentType, cacheControl: '300', upsert: false });
+    if (upload.error) throw new Error('The photo could not be uploaded. Please try again.');
+    const published = await client.rpc('publish_live_look', { p_live_look_id: prepared.data.id, p_caption: windowObject.GoHottLiveLook.validateCaption(caption) || null, p_duration_choice: durationChoice, p_latitude: position.latitude, p_longitude: position.longitude, p_accuracy_meters: Math.round(position.accuracy) });
+    if (published.error) throw new Error(published.error.message || 'The Live Look could not be published.'); return published.data;
+  }
+  async function removeLiveLook(id) { const result = await client.rpc('remove_live_look', { p_live_look_id: id }); if (result.error) throw new Error(result.error.message); }
+  async function reportLiveLook(id, reason, details = null) { const result = await client.rpc('report_live_look', { p_live_look_id: id, p_reason: reason, p_details: details }); if (result.error) throw new Error(result.error.code === '23505' ? 'You already reported this Live Look.' : result.error.message); }
+  function subscribeToLiveLooks(onChange) { return client.channel('gohott-live-looks').on('postgres_changes', { event: '*', schema: 'public', table: 'live_looks' }, onChange).subscribe(); }
+
+  windowObject.GoHottData = Object.freeze({ client, getVenuesWithRecentCheckIns, createCheckIn, getSavedVenueIds, saveVenue, unsaveVenue, getProfile, saveProfile, getUserCheckIns, getAccountDeletionRequest, requestAccountDeletion, subscribeToCheckIns, getActiveLiveLooks, uploadLiveLook, removeLiveLook, reportLiveLook, subscribeToLiveLooks });
 }(window));

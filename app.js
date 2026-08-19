@@ -1,6 +1,6 @@
 (function initialiseApp(windowObject, documentObject) {
   'use strict';
-  const state = { venues: [], checkIns: [], markets: [], savedIds: new Set(), profile: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle' };
+  const state = { venues: [], checkIns: [], markets: [], liveLooks: [], liveLooksAvailable: false, selectedLiveLookFile: null, savedIds: new Set(), profile: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle' };
   let lastFocusedElement = null;
   const el = (selector) => documentObject.querySelector(selector);
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
@@ -19,6 +19,7 @@
     });
   }
   function venueById(id) { return state.venues.find((venue) => String(venue.id) === String(id)); }
+  function looksForVenue(id) { return state.liveLooks.filter((look) => String(look.venue_id) === String(id)); }
   function readableTime(value) { if (!value) return ''; const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000)); return minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.floor(minutes / 60)}h ago`; }
   function reportTrustLabel(report) {
     if (report.trust_tier === 'server_assessed_nearby') return ' · Proximity assessed';
@@ -38,7 +39,8 @@
     if (!venues.length) { cards.innerHTML = '<div class="state-card">No venues are available in this city yet.</div>'; return; }
     cards.innerHTML = venues.map((venue, index) => {
       const distance = windowObject.GoHottGeo.formatDistance(venue.distance_meters); const saved = state.savedIds.has(venue.id);
-      return `<article class="venue-card"><button class="venue-main" type="button" data-venue="${escapeHtml(venue.id)}" aria-label="Open ${escapeHtml(venue.name)} details"><span class="rank">${String(index + 1).padStart(2, '0')}</span><span class="venue-info"><strong>${escapeHtml(venue.name)}${venue.is_verified ? ' <i class="verified-badge" aria-label="Verified venue data">✓</i>' : ''}</strong><span>${escapeHtml(venue.area || '')} · ${escapeHtml((venue.categories || [])[0] || venue.scene || 'Nightlife')}</span><em>● ${escapeHtml(venue.live_status)} · ${escapeHtml(venue.activity_label)}${distance ? ` · ${distance}` : ''}</em></span><span class="score">${escapeHtml(venue.live_score)}<small>HOTT</small></span></button><button class="save-mini ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}" aria-label="${saved ? 'Unsave' : 'Save'} ${escapeHtml(venue.name)}">${saved ? '♥' : '♡'}</button></article>`;
+      const lookCount = looksForVenue(venue.id).length;
+      return `<article class="venue-card"><button class="venue-main" type="button" data-venue="${escapeHtml(venue.id)}" aria-label="Open ${escapeHtml(venue.name)} details"><span class="rank">${String(index + 1).padStart(2, '0')}</span><span class="venue-info"><strong>${escapeHtml(venue.name)}${venue.is_verified ? ' <i class="verified-badge" aria-label="Verified venue data">✓</i>' : ''}</strong><span>${escapeHtml(venue.area || '')} · ${escapeHtml((venue.categories || [])[0] || venue.scene || 'Nightlife')}</span><em>● ${escapeHtml(venue.live_status)} · ${escapeHtml(venue.activity_label)}${distance ? ` · ${distance}` : ''}</em>${lookCount ? `<b class="live-look-badge">◉ ${lookCount} Live Look${lookCount === 1 ? '' : 's'}</b>` : ''}</span><span class="score">${escapeHtml(venue.live_score)}<small>HOTT</small></span></button><button class="save-mini ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}" aria-label="${saved ? 'Unsave' : 'Save'} ${escapeHtml(venue.name)}">${saved ? '♥' : '♡'}</button></article>`;
     }).join('');
   }
   function renderMarketSwitcher() {
@@ -48,7 +50,8 @@
   async function loadVenues() {
     if (state.loading) return; state.loading = true; el('#fresh').textContent = 'Updating…'; el('#fresh').classList.remove('is-live'); el('#error-region').innerHTML = '';
     try {
-      const result = await windowObject.GoHottData.getVenuesWithRecentCheckIns(); state.checkIns = result.checkIns; state.markets = result.markets; state.venues = calculateLiveVenues(result.venues, result.checkIns); renderMarketSwitcher();
+      const result = await windowObject.GoHottData.getVenuesWithRecentCheckIns(); state.checkIns = result.checkIns; state.markets = result.markets; state.venues = calculateLiveVenues(result.venues, result.checkIns);
+      const liveResult = await windowObject.GoHottData.getActiveLiveLooks().catch((error) => { console.info('Live Look is unavailable.', error.message); return { available: false, looks: [] }; }); state.liveLooksAvailable = liveResult.available; state.liveLooks = liveResult.looks; renderMarketSwitcher();
       if (result.checkInsError) console.warn('Recent crowd reports could not load.', result.checkInsError);
       renderDiscover(); el('#fresh').textContent = 'Live now'; el('#fresh').classList.add('is-live');
       const [hashRoute, hashId] = windowObject.location.hash.slice(1).split('/'); if (hashRoute === 'venue' && hashId && venueById(hashId)) openVenue(hashId);
@@ -74,7 +77,7 @@
     windowObject.GoHottMap.render({ venues, city: state.currentCity, center, position: state.position, selectVenue: showMapPreview });
   }
   function showMapPreview(venue) {
-    const preview = el('#map-preview'); preview.hidden = false; preview.innerHTML = `<div><p class="eyebrow">${escapeHtml(venue.area)} · VERIFIED DATA</p><strong>${escapeHtml(venue.name)}</strong><span>● ${escapeHtml(venue.live_status)} · ${escapeHtml(venue.live_score)} HOTT</span></div><button class="secondary-button" type="button" data-venue="${escapeHtml(venue.id)}">View</button>`;
+    const preview = el('#map-preview'); const count = looksForVenue(venue.id).length; preview.hidden = false; preview.innerHTML = `<div><p class="eyebrow">${escapeHtml(venue.area)} · VERIFIED DATA</p><strong>${escapeHtml(venue.name)}</strong><span>● ${escapeHtml(venue.live_status)} · ${escapeHtml(venue.live_score)} HOTT${count ? ` · ${count} Live Look${count === 1 ? '' : 's'}` : ''}</span></div><button class="secondary-button" type="button" data-venue="${escapeHtml(venue.id)}">View</button>`;
   }
 
   function navigate(route, options = {}) {
@@ -90,7 +93,8 @@
     const reports = state.checkIns.filter((report) => String(report.venue_id) === String(id)).slice(0, 5); const saved = state.savedIds.has(venue.id); const distance = windowObject.GoHottGeo.formatDistance(venue.distance_meters);
     const hours = tonightHours(venue.hours); const categories = Array.isArray(venue.categories) ? venue.categories.join(' · ') : '';
     const photoUrl = safeHttpsUrl(venue.photo_urls?.[0]); const websiteUrl = safeHttpsUrl(venue.website_url); const socialUrl = safeHttpsUrl(venue.social_url);
-    el('#venue-detail').innerHTML = `<div class="detail-hero">${photoUrl ? `<img class="venue-photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(venue.name)} venue">` : ''}<p class="eyebrow">${escapeHtml(venue.area || 'NIGHTLIFE')}${venue.is_verified ? ' · VERIFIED DATA' : ''}</p><h1>${escapeHtml(venue.name)}${venue.is_verified ? ' <i class="verified-badge" aria-label="Verified venue data">✓</i>' : ''}</h1><p>${escapeHtml(categories || venue.scene || 'Nightlife')}</p><div class="detail-score"><strong>${escapeHtml(venue.live_score)}</strong><span>GOHOTT SCORE<br>● ${escapeHtml(venue.live_status)}<br>${escapeHtml(venue.activity_label)}</span></div></div><div class="detail-actions"><button class="primary-button" type="button" data-check-in="${escapeHtml(venue.id)}">Report the vibe</button><button class="secondary-button ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}">${saved ? '♥ Saved' : '♡ Save'}</button></div><div class="detail-grid"><div><span>Area</span><strong>${escapeHtml(venue.area || 'Not listed')}</strong></div>${distance ? `<div><span>Distance</span><strong>${distance}</strong></div>` : ''}${hours ? `<div><span>Tonight</span><strong>${escapeHtml(hours)}</strong></div>` : ''}${venue.address ? `<div><span>Address</span><strong>${escapeHtml(venue.address)}</strong></div>` : ''}${venue.line_note ? `<div><span>Line</span><strong>${escapeHtml(venue.line_note)}</strong></div>` : ''}</div><div class="venue-links">${websiteUrl ? `<a class="venue-link" href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer">Official website ↗</a>` : ''}${socialUrl ? `<a class="venue-link" href="${escapeHtml(socialUrl)}" target="_blank" rel="noopener noreferrer">Official social ↗</a>` : ''}</div><section class="score-explainer"><strong>Why this score?</strong><span>Baseline ${escapeHtml(venue.hot_score || 50)} · Live activity ${venue.score_adjustment >= 0 ? '+' : ''}${escapeHtml(venue.score_adjustment)}</span></section><section class="reports"><div class="section-heading"><div><p class="eyebrow">CROWD PULSE</p><h2>Recent reports</h2></div></div>${reports.length ? reports.map((report) => `<div class="report-row"><span>${report.crowd_level >= 4 ? '🔥' : report.crowd_level === 2 ? '🌙' : '💤'}</span><div><strong>${escapeHtml(report.vibe)}</strong><small>${escapeHtml(readableTime(report.created_at))}${reportTrustLabel(report)}</small></div></div>`).join('') : '<div class="state-card">No recent crowd reports. Be the first tonight.</div>'}</section>`;
+    const liveLooks = looksForVenue(id); const liveLookGallery = `<section class="live-look-section"><div class="section-heading"><div><p class="eyebrow">LIVE LOOK</p><h2>See it right now.</h2></div><button class="secondary-button" type="button" data-add-live-look="${escapeHtml(id)}">Add</button></div>${liveLooks.length ? `<div class="live-look-gallery">${liveLooks.map((look) => `<article class="live-look-card"><img src="${escapeHtml(look.image_url)}" alt="Live Look at ${escapeHtml(venue.name)}" loading="lazy"><div class="live-look-meta"><strong>${escapeHtml(look.caption || 'The scene right now')}</strong><span>${escapeHtml(windowObject.GoHottLiveLook.ageLabel(look.published_at))} · ${escapeHtml(windowObject.GoHottLiveLook.remainingLabel(look.expires_at))}${look.proximity_assessment === 'server_assessed_nearby' ? ' · Proximity assessed' : ''}</span><div class="live-look-actions">${look.is_owner ? `<button type="button" data-remove-live-look="${escapeHtml(look.id)}">Remove</button>` : user() ? `<button type="button" data-report-live-look="${escapeHtml(look.id)}">Report</button>` : ''}</div></div></article>`).join('')}</div>` : `<div class="state-card">No active Live Looks yet. ${state.liveLooksAvailable ? 'Share a temporary photo of the scene.' : 'Live Look is awaiting its reviewed database rollout.'}</div>`}</section>`;
+    el('#venue-detail').innerHTML = `<div class="detail-hero">${photoUrl ? `<img class="venue-photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(venue.name)} venue">` : ''}<p class="eyebrow">${escapeHtml(venue.area || 'NIGHTLIFE')}${venue.is_verified ? ' · VERIFIED DATA' : ''}</p><h1>${escapeHtml(venue.name)}${venue.is_verified ? ' <i class="verified-badge" aria-label="Verified venue data">✓</i>' : ''}</h1><p>${escapeHtml(categories || venue.scene || 'Nightlife')}</p><div class="detail-score"><strong>${escapeHtml(venue.live_score)}</strong><span>GOHOTT SCORE<br>● ${escapeHtml(venue.live_status)}<br>${escapeHtml(venue.activity_label)}</span></div></div><div class="detail-actions"><button class="primary-button" type="button" data-check-in="${escapeHtml(venue.id)}">Report the vibe</button><button class="secondary-button ${saved ? 'is-saved' : ''}" type="button" data-save="${escapeHtml(venue.id)}">${saved ? '♥ Saved' : '♡ Save'}</button></div><div class="detail-grid"><div><span>Area</span><strong>${escapeHtml(venue.area || 'Not listed')}</strong></div>${distance ? `<div><span>Distance</span><strong>${distance}</strong></div>` : ''}${hours ? `<div><span>Tonight</span><strong>${escapeHtml(hours)}</strong></div>` : ''}${venue.address ? `<div><span>Address</span><strong>${escapeHtml(venue.address)}</strong></div>` : ''}${venue.line_note ? `<div><span>Line</span><strong>${escapeHtml(venue.line_note)}</strong></div>` : ''}</div><div class="venue-links">${websiteUrl ? `<a class="venue-link" href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer">Official website ↗</a>` : ''}${socialUrl ? `<a class="venue-link" href="${escapeHtml(socialUrl)}" target="_blank" rel="noopener noreferrer">Official social ↗</a>` : ''}</div><section class="score-explainer"><strong>Why this score?</strong><span>Baseline ${escapeHtml(venue.hot_score || 50)} · Live activity ${venue.score_adjustment >= 0 ? '+' : ''}${escapeHtml(venue.score_adjustment)}</span></section>${liveLookGallery}<section class="reports"><div class="section-heading"><div><p class="eyebrow">CROWD PULSE</p><h2>Recent reports</h2></div></div>${reports.length ? reports.map((report) => `<div class="report-row"><span>${report.crowd_level >= 4 ? '🔥' : report.crowd_level === 2 ? '🌙' : '💤'}</span><div><strong>${escapeHtml(report.vibe)}</strong><small>${escapeHtml(readableTime(report.created_at))}${reportTrustLabel(report)}</small></div></div>`).join('') : '<div class="state-card">No recent crowd reports. Be the first tonight.</div>'}</section>`;
   }
 
   function openAuth(context = '') { lastFocusedElement = documentObject.activeElement; el('#auth-modal').hidden = false; documentObject.body.classList.add('modal-open'); el('#auth-message').textContent = context; setTimeout(() => el('#auth-form input').focus(), 0); }
@@ -146,6 +150,29 @@
     catch (error) { el('#check-in-message').textContent = error.message; } finally { buttons.forEach((item) => { item.disabled = false; }); }
   }
 
+  function openLiveLook(id) {
+    state.currentVenue = venueById(id); if (!state.currentVenue) return;
+    if (!user()) { openAuth('Sign in to add a temporary Live Look.'); return; }
+    lastFocusedElement = documentObject.activeElement; state.selectedLiveLookFile = null; el('#live-look-form').reset(); el('#live-look-preview').hidden = true; el('#live-look-message').textContent = state.liveLooksAvailable ? '' : 'Live Look is awaiting its reviewed Phase 4 database rollout.'; el('#caption-count').textContent = '0/80'; el('#live-look-modal').hidden = false; documentObject.body.classList.add('modal-open');
+  }
+  function closeLiveLook() { el('#live-look-modal').hidden = true; documentObject.body.classList.remove('modal-open'); state.selectedLiveLookFile = null; lastFocusedElement?.focus?.(); }
+  function selectLiveLookFile(input) {
+    const file = input.files?.[0]; if (!file) return;
+    try { windowObject.GoHottLiveLook.validateFile(file); state.selectedLiveLookFile = file; const preview = el('#live-look-preview'); preview.src = URL.createObjectURL(file); preview.hidden = false; el('#live-look-message').textContent = ''; }
+    catch (error) { input.value = ''; state.selectedLiveLookFile = null; el('#live-look-message').textContent = error.message; }
+  }
+  async function submitLiveLook(form) {
+    const submit = form.querySelector('[type="submit"]'); if (!state.selectedLiveLookFile) { el('#live-look-message').textContent = 'Choose or take a photo first.'; return; }
+    submit.disabled = true; el('#live-look-message').textContent = 'Checking location and publishing…';
+    try {
+      const position = state.position || await useLocation(); if (!position) throw new Error('Location is required to add a Live Look. Discovery still works without it.');
+      const data = new FormData(form); const result = await windowObject.GoHottData.uploadLiveLook({ venueId: state.currentVenue.id, file: state.selectedLiveLookFile, caption: data.get('caption'), durationChoice: data.get('duration'), position });
+      closeLiveLook(); await loadVenues(); if (result.duration_fallback) windowObject.alert('Published for 60 minutes because a verified closing time is not available.');
+    } catch (error) { el('#live-look-message').textContent = error.message; } finally { submit.disabled = false; }
+  }
+  async function removeLiveLook(id) { if (!windowObject.confirm('Remove this Live Look from public view?')) return; try { await windowObject.GoHottData.removeLiveLook(id); await loadVenues(); } catch (error) { windowObject.alert(error.message); } }
+  async function reportLiveLook(id) { const reason = windowObject.prompt('Report reason: spam, unsafe, privacy, misleading, or other'); if (!reason) return; try { await windowObject.GoHottData.reportLiveLook(id, reason.trim().toLowerCase()); windowObject.alert('Report received. Thank you.'); } catch (error) { windowObject.alert(error.message); } }
+
   documentObject.addEventListener('click', (event) => {
     const route = event.target.closest('[data-route]'); if (route) { event.preventDefault(); navigate(route.dataset.route); }
     const city = event.target.closest('[data-city]'); if (city) setCity(city.dataset.city);
@@ -157,13 +184,20 @@
     if (event.target.closest('[data-open-auth]')) openAuth(); if (event.target.closest('[data-close-auth]')) closeAuth(); if (event.target.closest('[data-close-modal]')) closeCheckIn();
     if (event.target.closest('[data-toggle-auth]')) { state.authMode = state.authMode === 'signin' ? 'signup' : 'signin'; renderAuthMode(); el('#auth-message').textContent = ''; }
     if (event.target.closest('[data-sign-out]')) windowObject.GoHottAuth.signOut(); if (event.target.closest('[data-request-deletion]')) requestDeletion(); if (event.target.closest('[data-back]')) navigate(state.previousRoute || 'discover');
+    const addLook = event.target.closest('[data-add-live-look]'); if (addLook) openLiveLook(addLook.dataset.addLiveLook);
+    const removeLook = event.target.closest('[data-remove-live-look]'); if (removeLook) removeLiveLook(removeLook.dataset.removeLiveLook);
+    const reportLook = event.target.closest('[data-report-live-look]'); if (reportLook) reportLiveLook(reportLook.dataset.reportLiveLook);
+    if (event.target.closest('[data-close-live-look]')) closeLiveLook();
   });
-  documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); });
-  documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#check-in-modal').hidden) closeCheckIn(); } });
+  documentObject.addEventListener('change', (event) => { if (event.target.matches('#live-look-form input[type="file"]')) selectLiveLookFile(event.target); });
+  documentObject.addEventListener('input', (event) => { if (event.target.matches('#live-look-form [name="caption"]')) el('#caption-count').textContent = `${event.target.value.length}/80`; });
+  documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); if (event.target.id === 'live-look-form') submitLiveLook(event.target); });
+  documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#check-in-modal').hidden) closeCheckIn(); if (!el('#live-look-modal').hidden) closeLiveLook(); } });
   windowObject.addEventListener('hashchange', () => { const [route, id] = windowObject.location.hash.slice(1).split('/'); if (route === 'venue' && id) { state.currentVenue = venueById(id); if (state.currentVenue) { renderVenueDetail(id); navigate('venue', { skipHash: true }); } } else if (['discover', 'map', 'saved', 'profile'].includes(route)) navigate(route, { skipHash: true }); });
 
   windowObject.GoHottAuth.subscribe(onAuthChanged); windowObject.GoHottAuth.initialise();
   windowObject.GoHottData.subscribeToCheckIns(loadVenues, (status) => { if (status === 'CHANNEL_ERROR') el('#fresh').textContent = 'Refresh needed'; });
+  windowObject.GoHottData.subscribeToLiveLooks(() => loadVenues());
   loadVenues(); renderAuthMode();
   const [initialRoute, initialId] = windowObject.location.hash.slice(1).split('/'); if (initialRoute === 'venue' && initialId) { state.currentVenue = venueById(initialId); } navigate(['discover', 'map', 'saved', 'profile'].includes(initialRoute) ? initialRoute : 'discover', { skipHash: true });
   if ('serviceWorker' in navigator) windowObject.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch((error) => console.warn('Service worker registration failed.', error)));
