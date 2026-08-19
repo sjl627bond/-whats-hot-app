@@ -93,8 +93,8 @@
     if (!options.skipHash) windowObject.location.hash = route === 'venue' && state.currentVenue ? `venue/${state.currentVenue.id}` : route;
     if (route === 'map') renderMap(); if (route === 'saved') renderSaved(); if (route === 'social') renderSocial(); if (route === 'profile') renderProfile(); windowObject.scrollTo({ top: 0, behavior: 'instant' });
   }
-  function handleDeepLink() {
-    const deepLink = windowObject.GoHottMobile.parseDeepLink();
+  function handleDeepLink(value = windowObject.location.hash) {
+    const deepLink = windowObject.GoHottMobile.parseDeepLink(value);
     if (!deepLink) return false;
     if (deepLink.type === 'venue' && venueById(deepLink.id)) { openVenue(deepLink.id); return true; }
     if (deepLink.type === 'profile') { navigate('social', { skipHash: true }); return true; }
@@ -280,6 +280,7 @@
   documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); if (event.target.id === 'live-look-form') submitLiveLook(event.target); if (event.target.id === 'social-search') searchPeople(event.target); if (event.target.id === 'chat-form') { const input = event.target.elements.message; windowObject.GoHottData.sendMessage(state.activeConversation, input.value).then(() => { input.value = ''; renderSocial('chats'); }).catch((error) => windowObject.alert(error.message)); } });
   documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#check-in-modal').hidden) closeCheckIn(); if (!el('#live-look-modal').hidden) closeLiveLook(); } });
   windowObject.addEventListener('hashchange', () => { if (handleDeepLink()) return; const [route, id] = windowObject.location.hash.slice(1).split('/'); if (route === 'venue' && id) { state.currentVenue = venueById(id); if (state.currentVenue) { renderVenueDetail(id); navigate('venue', { skipHash: true }); } } else if (['discover', 'map', 'saved', 'social', 'profile'].includes(route)) navigate(route, { skipHash: true }); });
+  windowObject.addEventListener('gohott:native-link', (event) => handleDeepLink(event.detail?.hash));
 
   windowObject.GoHottAuth.subscribe(onAuthChanged); windowObject.GoHottAuth.initialise();
   windowObject.GoHottData.subscribeToCheckIns(loadVenues, (status) => { if (status === 'CHANNEL_ERROR') el('#fresh').textContent = 'Refresh needed'; });

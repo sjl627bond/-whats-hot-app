@@ -17,9 +17,7 @@ assert.equal(capacitor.appName, 'GoHott');
 assert.equal(capacitor.appId, 'com.placeholder.gohott');
 assert.equal(capacitor.webDir, 'www');
 assert.match(project, /PRODUCT_BUNDLE_IDENTIFIER = com\.placeholder\.gohott;/);
-const configuredTeams = [...project.matchAll(/DEVELOPMENT_TEAM = ([A-Z0-9]+);/g)].map((match) => match[1]);
-assert.ok(configuredTeams.every((team) => /^[A-Z0-9]{10}$/.test(team)), 'Any configured team must be an explicit Xcode-selected Apple Team ID.');
-assert.doesNotMatch(project, /YOUR[_-]?TEAM|PLACEHOLDER[_-]?TEAM/i);
+assert.doesNotMatch(project, /DEVELOPMENT_TEAM =/);
 assert.match(workspace, /group:App\.xcodeproj/);
 
 for (const key of ['NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription', 'NSLocationWhenInUseUsageDescription']) assert.match(plist, new RegExp(`<key>${key}</key>`));
@@ -39,12 +37,16 @@ for (const [name, version] of Object.entries({ '@capacitor/core': '8.5.0', '@cap
 }
 
 const listeners = {};
+const nativeEvents = [];
 const window = {
   Capacitor: { isNativePlatform: () => true, Plugins: { App: { addListener(name, callback) { listeners[name] = callback; } } } },
   location: { hash: '' },
-  dispatchEvent() {},
+  dispatchEvent(event) { nativeEvents.push(event); },
 };
-vm.runInNewContext(runtime, { window, URL, File: class File {}, fetch() {}, CustomEvent: class CustomEvent {} });
+vm.runInNewContext(runtime, {
+  window, URL, File: class File {}, fetch() {},
+  CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+});
 assert.equal(window.GoHottNative.isNative, true);
 assert.equal(window.GoHottNative.normaliseDeepLink('https://gohott.example/venue/abc-123'), '#share/venue/abc-123');
 assert.equal(window.GoHottNative.normaliseDeepLink('https://gohott.example/#share/venue/abc-123'), '#share/venue/abc-123');
@@ -53,6 +55,15 @@ assert.equal(window.GoHottNative.normaliseDeepLink('gohott://profile/user-9'), '
 assert.equal(window.GoHottNative.normaliseDeepLink('https://gohott.example/message/private'), null);
 listeners.appUrlOpen({ url: 'https://gohott.example/live-look/look-2' });
 assert.equal(window.location.hash, '#share/live-look/look-2');
+for (const [type, id] of [['venue', 'venue-1'], ['profile', 'user-2'], ['live-look', 'look-3'], ['plan', 'plan-4']]) {
+  window.location.hash = `#share/${type}/${id}`;
+  listeners.appUrlOpen({ url: `gohott://${type}/${id}` });
+  const event = nativeEvents.at(-1);
+  assert.equal(event.type, 'gohott:native-link');
+  assert.equal(event.detail.hash, `#share/${type}/${id}`);
+}
+assert.equal(nativeEvents.length, 4);
+assert.match(appCode, /addEventListener\('gohott:native-link',[\s\S]*handleDeepLink\(event\.detail\?\.hash\)/);
 
 async function nativeRuntimeWith(overrides) {
   const nativeWindow = {

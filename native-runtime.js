@@ -84,7 +84,12 @@
     if (!isNative || !plugins.App) return;
     plugins.App.addListener('appUrlOpen', ({ url }) => {
       const hash = normaliseDeepLink(url);
-      if (hash) windowObject.location.hash = hash;
+      if (!hash) return;
+      if (windowObject.location.hash === hash) {
+        windowObject.dispatchEvent(new CustomEvent('gohott:native-link', { detail: { hash } }));
+        return;
+      }
+      windowObject.location.hash = hash;
     });
     plugins.App.addListener('appStateChange', ({ isActive }) => {
       windowObject.dispatchEvent(new CustomEvent('gohott:native-app-state', { detail: { isActive } }));

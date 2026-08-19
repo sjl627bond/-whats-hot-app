@@ -4,7 +4,7 @@
 
 The Phase 6 web app is now packaged with Capacitor 8. The native shell preserves the tested HTML/CSS/JavaScript and Supabase backend while providing camera, Photos, location, push, sharing, App/Universal Link, keyboard, and lifecycle bridges. The PWA remains the canonical product implementation; product logic is not forked into Swift.
 
-`com.placeholder.gohott` is deliberately non-release configuration. It is not a recommended or reserved identifier. Replace it in `capacitor.config.json` and both Xcode build configurations only after the owner supplies and registers the final reverse-DNS Bundle ID. Xcode may record the team explicitly selected by the owner, but no signing identity, certificate, provisioning profile, App Store Connect ID, or APNs credential is committed.
+`com.placeholder.gohott` is deliberately non-release configuration. It is not a recommended or reserved identifier. Replace it in `capacitor.config.json` and both Xcode build configurations only after the owner supplies and registers the final reverse-DNS Bundle ID. The Apple Development Team remains an uncommitted local Xcode selection; no signing identity, certificate, provisioning profile, App Store Connect ID, or APNs credential is committed.
 
 ## Native requirements
 
