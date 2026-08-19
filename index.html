@@ -112,6 +112,24 @@
     </div>
   </div>
 
+  <div class="modal" id="delete-account-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description" hidden>
+    <button class="modal-backdrop" type="button" data-close-deletion aria-label="Cancel account deletion"></button>
+    <div class="sheet deletion-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-deletion aria-label="Cancel account deletion">×</button>
+      <p class="eyebrow">ACCOUNT DELETION</p><h2 id="delete-account-title">Request deletion?</h2>
+      <div id="delete-account-description" class="deletion-explanation">
+        <p>This submits a protected request. It does not immediately delete your account.</p>
+        <p>After identity verification, a privileged backend worker is designed to remove your Auth account and associated profile, saves, follows, blocks, conversation participation, messages, plans, Live Looks, reactions, notifications, and other account-linked content.</p>
+        <p>Check-ins may remain without your account identifier. Safety, fraud-prevention, legal, and limited backup records may be retained or de-identified where required.</p>
+      </div>
+      <form id="delete-account-form">
+        <label class="confirmation-check"><input type="checkbox" name="confirmed" required> <span>I understand this is a deletion request and that completed deletion cannot be undone.</span></label>
+        <button class="primary-button danger-button" type="submit" disabled>Submit deletion request</button>
+        <button class="text-button" type="button" data-close-deletion>Keep my account</button>
+        <p class="form-message" id="deletion-message" role="status"></p>
+      </form>
+    </div>
+  </div>
+
   <div class="modal" id="live-look-modal" role="dialog" aria-modal="true" aria-labelledby="live-look-title" hidden>
     <button class="modal-backdrop" type="button" data-close-live-look aria-label="Close Live Look"></button>
     <div class="sheet live-look-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-live-look aria-label="Close">×</button>

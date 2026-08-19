@@ -49,7 +49,7 @@ Full Xcode is required. Command Line Tools alone cannot resolve/build the iOS ta
 5. Configure APNs in a server environment; never place an APNs key, Supabase service-role key, or moderation credential in the app.
 6. Configure universal links and verify cold start, warm start, signed-out routing, missing/deleted content, and web fallback.
 7. Exercise camera/library denial, limited Photos access, location denial/revocation, offline launch, poor network, session expiry, account deletion, data export, blocks, reports, and notification privacy on physical devices.
-8. Provide in-app account deletion initiation, report/block controls for user-generated content, published moderation response processes, and reviewer test credentials.
+8. Deploy and validate the protected account-deletion worker. The app now provides authenticated initiation and explicit confirmation, while the existing request table derives ownership from `auth.uid()` and prevents clients from selecting another user. The worker must revoke sessions, remove Storage objects before deleting the Auth user, perform the documented cascade/retention review, and record completion without exposing a service-role or secret key to the app. Also provide published moderation response processes and reviewer test credentials.
 9. Produce signed Release archive, upload symbols, complete App Privacy answers from a verified data inventory, add screenshots for current iPhone sizes, and run TestFlight internal then external review.
 10. Submit only after Supabase advisors, browser/native regression, accessibility, retention jobs, incident response, backups, and production observability pass.
 

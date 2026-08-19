@@ -103,6 +103,8 @@
     return result.data;
   }
   async function requestAccountDeletion(reason = null) {
+    const currentUser = windowObject.GoHottAuth?.getUser?.();
+    if (!currentUser?.id) throw new Error('Sign in to request account deletion.');
     const result = await client.from('account_deletion_requests').insert({ reason: reason || null }).select('status,requested_at').single();
     if (result.error) {
       if (result.error.code === '23505') throw new Error('An account deletion request is already pending.');
