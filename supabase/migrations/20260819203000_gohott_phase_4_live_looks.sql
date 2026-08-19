@@ -95,7 +95,7 @@ end; $$;
 
 create or replace function public.get_active_live_looks()
 returns table(id uuid,venue_id uuid,caption text,duration_choice text,storage_path text,proximity_assessment text,created_at timestamptz,published_at timestamptz,expires_at timestamptz,is_owner boolean)
-language sql stable security definer set search_path='' as $$
+language sql stable security invoker set search_path='' as $$
   select l.id,l.venue_id,l.caption,l.duration_choice,l.storage_path,l.proximity_assessment,l.created_at,l.published_at,l.expires_at,(l.user_id=(select auth.uid()))
   from public.live_looks l where l.moderation_state='approved' and l.removed_at is null and l.expires_at>now() order by l.published_at desc limit 60
 $$;

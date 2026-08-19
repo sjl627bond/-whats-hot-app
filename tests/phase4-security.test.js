@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const migration = fs.readFileSync(new URL('../supabase/migrations/20260819203000_gohott_phase_4_live_looks.sql', `file://${__filename}`), 'utf8');
 const browser = ['live-look.js', 'supabase.js', 'app.js'].map((file) => fs.readFileSync(new URL(`../${file}`, `file://${__filename}`), 'utf8')).join('\n');
 assert.doesNotMatch(migration, /\bend\s+\$\$;/i, 'every PL/pgSQL block must terminate with end; $$;');
+assert.match(migration, /function public\.get_active_live_looks\(\)[^$]*?language sql stable security invoker/i);
+assert.doesNotMatch(migration, /function public\.get_active_live_looks\(\)[^$]*?language sql stable security definer/i);
 assert.equal((migration.match(/\bend;\s+\$\$;/gi) || []).length, 7, 'all four functions and three DO blocks must have valid terminators');
 const plpgsqlFunctions = [...migration.matchAll(/create or replace function\s+public\.(\w+)\([^$]*?language plpgsql[^$]*?as \$\$([\s\S]*?)\$\$;/gi)];
 assert.deepEqual(plpgsqlFunctions.map((match) => match[1]), ['prepare_live_look_upload', 'publish_live_look', 'remove_live_look', 'report_live_look']);
