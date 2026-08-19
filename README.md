@@ -19,7 +19,7 @@ Phase 5 adds a migration-gated social foundation: richer profiles, people discov
 
 ## Architecture
 
-GoHott remains a dependency-light static application compatible with Vercel.
+GoHott remains a dependency-light static application compatible with Vercel. Capacitor adds a thin native iOS shell; the deployable web root and production Supabase backend remain the same.
 
 | File | Responsibility |
 | --- | --- |
@@ -35,12 +35,16 @@ GoHott remains a dependency-light static application compatible with Vercel.
 | `map.js` | Leaflet map, OpenStreetMap tiles, venue markers, and user position |
 | `app.js` | Product state, scoring, navigation, views, and interaction orchestration |
 | `sw.js` | Versioned network-first app-shell cache |
+| `native-runtime.js` | Browser-safe adapter for Capacitor camera, location, push, sharing, links, and lifecycle |
+| `capacitor.config.json` | Native shell configuration with an explicit non-release Bundle ID placeholder |
+| `ios/App/App.xcworkspace` | Generated GoHott iOS workspace using Swift Package Manager |
+| `scripts/build-web.mjs` | Copies the canonical web app into the ignored native `www` build directory |
 | `supabase/migrations/` | Additive database schema, grants, and RLS policies |
 | `docs/PHASE3_MIGRATION.md` | Phase 3 security review, rollout, and production configuration checklist |
 | `docs/PHASE4_MIGRATION.md` | Live Look Storage, RLS, privacy, cleanup, and rollout checklist |
 | `docs/PHASE5_MIGRATION.md` | Social schema, RLS, privacy, Realtime, and staged rollout checklist |
 
-No framework or build step is required.
+No build step is required for Vercel/web deployment. Native development requires Node 22+, pnpm, Capacitor, and full Xcode; see `docs/IOS_LAUNCH_READINESS.md`.
 
 ## Local development
 
@@ -51,6 +55,8 @@ python3 -m http.server 8080
 ```
 
 Open `http://localhost:8080`. Geolocation works on localhost and HTTPS deployments. The map and Supabase client libraries load from pinned CDNs, so an internet connection is required for first use.
+
+Run all tests with `pnpm test`. For iOS, run `pnpm build`, `pnpm ios:sync`, then open `ios/App/App.xcworkspace`. The committed Bundle ID is deliberately unusable for release until the owner supplies the registered identifier and Apple team.
 
 ## Supabase
 

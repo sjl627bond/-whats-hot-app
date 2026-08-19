@@ -1,1 +1,8 @@
 supabase/.temp/
+node_modules/
+.pnpm-store/
+www/
+ios/App/DerivedData/
+ios/App/build/
+*.xcuserstate
+xcuserdata/

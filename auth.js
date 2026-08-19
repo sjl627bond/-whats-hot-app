@@ -11,6 +11,12 @@
     session = data?.session || null;
     notify();
     client.auth.onAuthStateChange((_event, nextSession) => { session = nextSession; notify(); });
+    windowObject.addEventListener('gohott:native-app-state', ({ detail }) => {
+      if (detail?.isActive) {
+        client.auth.startAutoRefresh();
+        client.auth.getSession().then(({ data }) => { session = data?.session || null; notify(); });
+      } else client.auth.stopAutoRefresh();
+    });
     return session;
   }
   async function signIn(email, password) {

@@ -198,7 +198,12 @@
   }
   async function notificationSettings() {
     const capability = windowObject.GoHottMobile.notificationCapability(); const message = el('#privacy-message');
-    message.textContent = capability.available ? 'Notification delivery is ready for native/APNs configuration. In-app activity notifications remain available.' : 'Push notifications are not available in this browser. In-app activity notifications remain available.';
+    if (windowObject.GoHottNative?.isNative) {
+      try { const result = await windowObject.GoHottNative.requestPushPermission(); message.textContent = result.status === 'denied' ? 'Notifications remain off. You can enable them later in iOS Settings.' : 'Notification permission is ready. Device delivery starts after the private APNs backend is configured.'; }
+      catch { message.textContent = 'Push registration is awaiting Apple signing and the private APNs backend. In-app notifications remain available.'; }
+      return;
+    }
+    message.textContent = capability.available ? 'Web notification delivery is supported but not enabled yet. In-app activity notifications remain available.' : 'Push notifications are not available in this browser. In-app activity notifications remain available.';
   }
 
   async function openCheckIn(id) {
@@ -222,8 +227,12 @@
   function closeLiveLook() { el('#live-look-modal').hidden = true; documentObject.body.classList.remove('modal-open'); state.selectedLiveLookFile = null; lastFocusedElement?.focus?.(); }
   function selectLiveLookFile(input) {
     const file = input.files?.[0]; if (!file) return;
+    selectLiveLookFileValue(file); if (!state.selectedLiveLookFile) input.value = '';
+  }
+  function selectLiveLookFileValue(file) {
+    if (!file) return;
     try { windowObject.GoHottLiveLook.validateFile(file); state.selectedLiveLookFile = file; const preview = el('#live-look-preview'); preview.src = URL.createObjectURL(file); preview.hidden = false; el('#live-look-message').textContent = ''; }
-    catch (error) { input.value = ''; state.selectedLiveLookFile = null; el('#live-look-message').textContent = error.message; }
+    catch (error) { state.selectedLiveLookFile = null; el('#live-look-message').textContent = error.message; }
   }
   async function submitLiveLook(form) {
     const submit = form.querySelector('[type="submit"]'); if (!state.selectedLiveLookFile) { el('#live-look-message').textContent = 'Choose or take a photo first.'; return; }
@@ -238,6 +247,8 @@
   async function reportLiveLook(id) { const reason = windowObject.prompt('Report reason: spam, unsafe, privacy, misleading, or other'); if (!reason) return; try { await windowObject.GoHottData.reportLiveLook(id, reason.trim().toLowerCase()); windowObject.alert('Report received. Thank you.'); } catch (error) { windowObject.alert(error.message); } }
 
   documentObject.addEventListener('click', (event) => {
+    const nativePhoto = event.target.closest('[data-native-photo]');
+    if (nativePhoto && windowObject.GoHottNative?.isNative) { event.preventDefault(); windowObject.GoHottNative.pickPhoto(nativePhoto.dataset.nativePhoto).then(selectLiveLookFileValue).catch((error) => { if (!/cancel/i.test(error.message || '')) el('#live-look-message').textContent = error.message; }); return; }
     const route = event.target.closest('[data-route]'); if (route) { event.preventDefault(); navigate(route.dataset.route); }
     const city = event.target.closest('[data-city]'); if (city) setCity(city.dataset.city);
     const venue = event.target.closest('[data-venue]'); if (venue) openVenue(venue.dataset.venue);

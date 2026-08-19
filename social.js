@@ -30,6 +30,7 @@
   }
   async function share({ type, id, title, text }) {
     const url = new URL(sharePath(type, id), windowObject.location.href).href;
+    if (windowObject.GoHottNative?.isNative) return windowObject.GoHottNative.nativeShare({ title, text, url });
     if (windowObject.navigator.share) {
       try { await windowObject.navigator.share({ title, text, url }); return 'shared'; }
       catch (error) { if (error.name === 'AbortError') return 'cancelled'; }
