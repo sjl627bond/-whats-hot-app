@@ -91,7 +91,7 @@ do $$ begin
   if not exists (select 1 from pg_policies where schemaname='public' and tablename='live_looks' and policyname='live_looks_owner_read') then
     create policy live_looks_owner_read on public.live_looks for select to authenticated using ((select auth.uid())=user_id);
   end if;
-end $$;
+end; $$;
 
 create or replace function public.get_active_live_looks()
 returns table(id uuid,venue_id uuid,caption text,duration_choice text,storage_path text,proximity_assessment text,created_at timestamptz,published_at timestamptz,expires_at timestamptz,is_owner boolean)
@@ -116,7 +116,7 @@ do $$ begin
       bucket_id='live-looks' and exists (select 1 from public.live_looks l where l.storage_path=name and ((l.moderation_state='approved' and l.removed_at is null and l.expires_at>now()) or l.user_id=(select auth.uid())))
     );
   end if;
-end $$;
+end; $$;
 
 create or replace function public.prepare_live_look_upload(p_venue_id uuid,p_content_type text,p_byte_size integer,p_extension text,p_content_hash text)
 returns jsonb language plpgsql security definer set search_path='' as $$
@@ -134,7 +134,7 @@ begin
   v_path:=v_user::text||'/'||v_id::text||'/original.'||p_extension;
   insert into public.live_looks(id,venue_id,user_id,storage_path,duration_choice,content_type,byte_size,content_hash) values(v_id,p_venue_id,v_user,v_path,'60_minutes',p_content_type,p_byte_size,p_content_hash);
   return jsonb_build_object('id',v_id,'path',v_path);
-end $$;
+end; $$;
 
 create or replace function public.publish_live_look(p_live_look_id uuid,p_caption text,p_duration_choice text,p_latitude double precision,p_longitude double precision,p_accuracy_meters integer)
 returns jsonb language plpgsql security definer set search_path='' as $$
@@ -169,13 +169,13 @@ begin
   update public.live_looks set caption=nullif(trim(p_caption),''),duration_choice=p_duration_choice,published_at=now(),expires_at=v_expiry,moderation_state='approved',proximity_assessment='server_assessed_nearby',distance_meters=v_distance where id=v_look.id;
   insert into public.moderation_audit_log(actor_user_id,entity_type,entity_id,action,metadata) values(v_user,'live_look',v_look.id,'published',jsonb_build_object('duration_fallback',v_fallback));
   return jsonb_build_object('id',v_look.id,'expires_at',v_expiry,'duration_fallback',v_fallback);
-end $$;
+end; $$;
 
 create or replace function public.remove_live_look(p_live_look_id uuid) returns void language plpgsql security definer set search_path='' as $$
-declare v_user uuid:=auth.uid(); begin if v_user is null or not exists(select 1 from auth.sessions s where s.user_id=v_user and s.id::text=auth.jwt()->>'session_id') then raise exception using errcode='42501',message='Sign in again.'; end if; update public.live_looks set moderation_state='removed',removed_at=now() where id=p_live_look_id and user_id=v_user and removed_at is null; if not found then raise exception using errcode='42501',message='Live Look not found.'; end if; insert into public.moderation_audit_log(actor_user_id,entity_type,entity_id,action) values(v_user,'live_look',p_live_look_id,'owner_removed'); end $$;
+declare v_user uuid:=auth.uid(); begin if v_user is null or not exists(select 1 from auth.sessions s where s.user_id=v_user and s.id::text=auth.jwt()->>'session_id') then raise exception using errcode='42501',message='Sign in again.'; end if; update public.live_looks set moderation_state='removed',removed_at=now() where id=p_live_look_id and user_id=v_user and removed_at is null; if not found then raise exception using errcode='42501',message='Live Look not found.'; end if; insert into public.moderation_audit_log(actor_user_id,entity_type,entity_id,action) values(v_user,'live_look',p_live_look_id,'owner_removed'); end; $$;
 
 create or replace function public.report_live_look(p_live_look_id uuid,p_reason text,p_details text default null) returns void language plpgsql security definer set search_path='' as $$
-declare v_user uuid:=auth.uid(); v_count integer; begin if v_user is null or not exists(select 1 from auth.sessions s where s.user_id=v_user and s.id::text=auth.jwt()->>'session_id') then raise exception using errcode='42501',message='Sign in to report content.'; end if; if p_reason not in ('spam','unsafe','privacy','misleading','other') or char_length(coalesce(p_details,''))>200 then raise exception using errcode='22023',message='Invalid report.'; end if; insert into public.live_look_reports(live_look_id,reporter_user_id,reason,details) values(p_live_look_id,v_user,p_reason,nullif(trim(p_details),'')); update public.live_looks set report_count=report_count+1 where id=p_live_look_id returning report_count into v_count; if v_count>=3 then update public.live_looks set moderation_state='pending_review' where id=p_live_look_id and moderation_state='approved'; end if; insert into public.moderation_audit_log(actor_user_id,entity_type,entity_id,action,metadata) values(v_user,'live_look',p_live_look_id,'reported',jsonb_build_object('reason',p_reason)); end $$;
+declare v_user uuid:=auth.uid(); v_count integer; begin if v_user is null or not exists(select 1 from auth.sessions s where s.user_id=v_user and s.id::text=auth.jwt()->>'session_id') then raise exception using errcode='42501',message='Sign in to report content.'; end if; if p_reason not in ('spam','unsafe','privacy','misleading','other') or char_length(coalesce(p_details,''))>200 then raise exception using errcode='22023',message='Invalid report.'; end if; insert into public.live_look_reports(live_look_id,reporter_user_id,reason,details) values(p_live_look_id,v_user,p_reason,nullif(trim(p_details),'')); update public.live_looks set report_count=report_count+1 where id=p_live_look_id returning report_count into v_count; if v_count>=3 then update public.live_looks set moderation_state='pending_review' where id=p_live_look_id and moderation_state='approved'; end if; insert into public.moderation_audit_log(actor_user_id,entity_type,entity_id,action,metadata) values(v_user,'live_look',p_live_look_id,'reported',jsonb_build_object('reason',p_reason)); end; $$;
 
 revoke all on function public.prepare_live_look_upload(uuid,text,integer,text,text), public.publish_live_look(uuid,text,text,double precision,double precision,integer), public.remove_live_look(uuid), public.report_live_look(uuid,text,text) from public,anon;
 grant execute on function public.prepare_live_look_upload(uuid,text,integer,text,text), public.publish_live_look(uuid,text,text,double precision,double precision,integer), public.remove_live_look(uuid), public.report_live_look(uuid,text,text) to authenticated;
@@ -184,7 +184,7 @@ grant execute on function public.get_active_live_looks() to anon,authenticated;
 
 do $$ begin
   if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='live_looks') then alter publication supabase_realtime add table public.live_looks; end if;
-end $$;
+end; $$;
 
 comment on column public.live_looks.proximity_assessment is 'Server-calculated from client-supplied device coordinates; not cryptographic proof of presence.';
 comment on table public.live_look_location_evidence is 'Private precise evidence. Purge expires_at rows and orphaned Storage objects with a privileged scheduled worker.';
