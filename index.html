@@ -35,7 +35,7 @@ header{padding:18px;display:flex;justify-content:space-between;align-items:cente
 <div class="modal" id="modal"><div class="sheet"><h2 id="checkTitle">How's the vibe?</h2><p style="color:#999;font-size:13px">Your report updates the live score for everyone.</p><div class="vote"><button onclick="vote(5,'GOING OFF')">🔥 Going off</button><button onclick="vote(4,'BUSY')">👍 Pretty busy</button><button onclick="vote(2,'CHILL')">😐 Chill</button><button onclick="vote(1,'DEAD')">🥱 Dead</button></div><button class="done" onclick="closeM()">Done</button></div></div>
 <script>
 const SUPABASE_URL="https://vllqnjteydpxibzsxxvv.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY="PASTE_YOUR_PUBLISHABLE_KEY_HERE";
+const sb_publishable_fv2e2n6hjEf4JOv4T9eFNA_RICo7FtZ";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 let venues=[],currentVenue=null;
 function err(m){document.getElementById('err').innerHTML='<div class="error">'+m+'</div>'}
