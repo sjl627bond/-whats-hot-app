@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const output = resolve(root, 'www');
 const assets = [
-  'index.html', 'privacy.html', 'terms.html', 'offline.html',
-  'styles.css', 'mobile.css', 'app.js', 'auth.js', 'config.js', 'geo.js',
+  'index.html', 'privacy.html', 'terms.html', 'support.html', 'privacy-choices.html', 'offline.html',
+  'styles.css', 'mobile.css', 'legal.css', 'app.js', 'auth.js', 'config.js', 'geo.js',
   'live-look.js', 'map.js', 'mobile.js', 'native-runtime.js', 'observability.js',
   'ranking.js', 'social.js', 'supabase.js', 'sw.js', 'manifest.json',
   'icon.svg', 'icon-192.png', 'icon-512.png',
