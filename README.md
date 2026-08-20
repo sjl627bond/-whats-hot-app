@@ -63,6 +63,7 @@ Run all tests with `pnpm test`. For iOS, run `pnpm build`, `pnpm ios:sync`, then
 The frontend depends on:
 
 - `venues`: public venue discovery data, including nullable `latitude` and `longitude`
+- `venue_profiles`: curated venue metadata and the canonical verified-coordinate source. A database trigger mirrors only verified coordinate pairs into `venues` for map reads; future coordinates must enter through the server-only `set_verified_venue_coordinates` workflow with an address and HTTPS source evidence.
 - `check_ins`: live crowd reports
 - `profiles`: private per-user profile data added by Phase 2
 - `saved_venues`: private user-to-venue relationships added by Phase 2
