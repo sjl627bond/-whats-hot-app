@@ -116,7 +116,28 @@
 
   function openAuth(context = '') { lastFocusedElement = documentObject.activeElement; el('#auth-modal').hidden = false; documentObject.body.classList.add('modal-open'); el('#auth-message').textContent = context; setTimeout(() => el('#auth-form input').focus(), 0); }
   function closeAuth() { el('#auth-modal').hidden = true; documentObject.body.classList.remove('modal-open'); lastFocusedElement?.focus?.(); }
-  function renderAuthMode() { const signup = state.authMode === 'signup'; el('#auth-title').textContent = signup ? 'Create account' : 'Sign in'; el('#auth-form button').textContent = signup ? 'Create account' : 'Sign in'; el('[data-toggle-auth]').textContent = signup ? 'Already have an account? Sign in' : 'Create an account instead'; el('#auth-form [name="password"]').autocomplete = signup ? 'new-password' : 'current-password'; }
+  function renderAuthMode() { const signup = state.authMode === 'signup'; el('#auth-title').textContent = signup ? 'Create account' : 'Sign in'; el('#auth-form button').textContent = signup ? 'Create account' : 'Sign in'; el('[data-toggle-auth]').textContent = signup ? 'Already have an account? Sign in' : 'Create an account instead'; el('[data-forgot-password]').hidden = signup; el('#auth-form [name="password"]').autocomplete = signup ? 'new-password' : 'current-password'; }
+  function openPasswordRecovery(mode = 'request') {
+    closeAuth(); const modal = el('#password-recovery-modal'); const requestForm = el('#password-recovery-request-form'); const updateForm = el('#password-recovery-update-form');
+    const updating = mode === 'update'; requestForm.hidden = updating; updateForm.hidden = !updating; el('#password-recovery-title').textContent = updating ? 'Set a new password' : 'Reset your password'; el('#password-recovery-copy').textContent = updating ? 'Choose a new password for your GoHott account.' : 'Enter your account email and we’ll send a secure recovery link.'; el('#password-recovery-message').textContent = ''; modal.hidden = false; documentObject.body.classList.add('modal-open'); setTimeout(() => (updating ? updateForm : requestForm).querySelector('input').focus(), 0);
+  }
+  function closePasswordRecovery() { el('#password-recovery-modal').hidden = true; documentObject.body.classList.remove('modal-open'); }
+  async function requestPasswordRecovery(form) {
+    const submit = form.querySelector('[type="submit"]'); const message = el('#password-recovery-message'); submit.disabled = true; message.textContent = 'Sending a secure recovery email…';
+    try { await windowObject.GoHottAuth.requestPasswordReset(new FormData(form).get('email')); message.textContent = 'If an account exists for that email, a recovery link is on its way.'; }
+    catch (error) { message.textContent = friendlyAuthError(error.message); } finally { submit.disabled = false; }
+  }
+  async function updateRecoveredPassword(form) {
+    const submit = form.querySelector('[type="submit"]'); const message = el('#password-recovery-message'); const data = new FormData(form); const password = String(data.get('password') || '');
+    if (password !== data.get('confirmation')) { message.textContent = 'Passwords do not match.'; return; }
+    submit.disabled = true; message.textContent = 'Updating your password…';
+    try { await windowObject.GoHottAuth.updatePassword(password); message.textContent = 'Password updated. You’re securely signed in.'; form.reset(); setTimeout(closePasswordRecovery, 900); }
+    catch (error) { message.textContent = friendlyAuthError(error.message); } finally { submit.disabled = false; }
+  }
+  function onPasswordRecovery(detail) {
+    if (detail.status === 'ready') openPasswordRecovery('update');
+    else if (detail.status === 'error') { openPasswordRecovery('request'); el('#password-recovery-message').textContent = detail.message; }
+  }
   async function handleAuthSubmit(form) {
     const message = el('#auth-message'); const submit = form.querySelector('button[type="submit"]'); submit.disabled = true; message.textContent = state.authMode === 'signup' ? 'Creating your account…' : 'Signing you in…';
     try { const data = new FormData(form); if (state.authMode === 'signup') { const result = await windowObject.GoHottAuth.signUp(data.get('email'), data.get('password')); message.textContent = result.needsConfirmation ? 'Check your email to confirm your account.' : 'Account created.'; if (!result.needsConfirmation) closeAuth(); } else { await windowObject.GoHottAuth.signIn(data.get('email'), data.get('password')); closeAuth(); } }
@@ -278,6 +299,9 @@
     if (event.target.closest('[data-location]')) useLocation(); if (event.target.closest('[data-account]')) user() ? navigate('profile') : openAuth();
     if (event.target.closest('[data-open-auth]')) openAuth(); if (event.target.closest('[data-close-auth]')) closeAuth(); if (event.target.closest('[data-close-modal]')) closeCheckIn();
     if (event.target.closest('[data-toggle-auth]')) { state.authMode = state.authMode === 'signin' ? 'signup' : 'signin'; renderAuthMode(); el('#auth-message').textContent = ''; }
+    if (event.target.closest('[data-forgot-password]')) { const email = el('#auth-form [name="email"]').value; openPasswordRecovery('request'); el('#password-recovery-request-form [name="email"]').value = email; }
+    if (event.target.closest('[data-close-password-recovery]')) closePasswordRecovery();
+    if (event.target.closest('[data-back-to-sign-in]')) { closePasswordRecovery(); state.authMode = 'signin'; renderAuthMode(); openAuth(); }
     const signOutButton = event.target.closest('[data-sign-out]'); if (signOutButton) signOut(signOutButton); if (event.target.closest('[data-request-deletion]')) openDeletion(); if (event.target.closest('[data-close-deletion]')) closeDeletion(); if (event.target.closest('[data-request-export]')) requestExport(); if (event.target.closest('[data-notification-settings]')) notificationSettings(); if (event.target.closest('[data-privacy-settings]')) navigate('profile'); if (event.target.closest('[data-back]')) navigate(state.previousRoute || 'discover');
     const addLook = event.target.closest('[data-add-live-look]'); if (addLook) openLiveLook(addLook.dataset.addLiveLook);
     const removeLook = event.target.closest('[data-remove-live-look]'); if (removeLook) removeLiveLook(removeLook.dataset.removeLiveLook);
@@ -297,12 +321,12 @@
   });
   documentObject.addEventListener('change', (event) => { if (event.target.matches('#live-look-form input[type="file"]')) selectLiveLookFile(event.target); if (event.target.matches('#delete-account-form [name="confirmed"]')) el('#delete-account-form [type="submit"]').disabled = !event.target.checked; });
   documentObject.addEventListener('input', (event) => { if (event.target.matches('#live-look-form [name="caption"]')) el('#caption-count').textContent = `${event.target.value.length}/80`; });
-  documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); if (event.target.id === 'delete-account-form') requestDeletion(event.target); if (event.target.id === 'live-look-form') submitLiveLook(event.target); if (event.target.id === 'social-search') searchPeople(event.target); if (event.target.id === 'chat-form') { const input = event.target.elements.message; windowObject.GoHottData.sendMessage(state.activeConversation, input.value).then(() => { input.value = ''; renderSocial('chats'); }).catch((error) => windowObject.alert(error.message)); } });
-  documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#delete-account-modal').hidden) closeDeletion(); if (!el('#check-in-modal').hidden) closeCheckIn(); if (!el('#live-look-modal').hidden) closeLiveLook(); } });
+  documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'password-recovery-request-form') requestPasswordRecovery(event.target); if (event.target.id === 'password-recovery-update-form') updateRecoveredPassword(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); if (event.target.id === 'delete-account-form') requestDeletion(event.target); if (event.target.id === 'live-look-form') submitLiveLook(event.target); if (event.target.id === 'social-search') searchPeople(event.target); if (event.target.id === 'chat-form') { const input = event.target.elements.message; windowObject.GoHottData.sendMessage(state.activeConversation, input.value).then(() => { input.value = ''; renderSocial('chats'); }).catch((error) => windowObject.alert(error.message)); } });
+  documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#password-recovery-modal').hidden) closePasswordRecovery(); if (!el('#delete-account-modal').hidden) closeDeletion(); if (!el('#check-in-modal').hidden) closeCheckIn(); if (!el('#live-look-modal').hidden) closeLiveLook(); } });
   windowObject.addEventListener('hashchange', () => { if (handleDeepLink()) return; const [route, id] = windowObject.location.hash.slice(1).split('/'); if (route === 'venue' && id) { state.currentVenue = venueById(id); if (state.currentVenue) { renderVenueDetail(id); navigate('venue', { skipHash: true }); } } else if (['discover', 'map', 'saved', 'social', 'profile'].includes(route)) navigate(route, { skipHash: true }); });
   windowObject.addEventListener('gohott:native-link', (event) => handleDeepLink(event.detail?.hash));
 
-  windowObject.GoHottAuth.subscribe(onAuthChanged); windowObject.GoHottAuth.initialise();
+  windowObject.GoHottAuth.subscribe(onAuthChanged); windowObject.GoHottAuth.subscribeToRecovery(onPasswordRecovery); windowObject.GoHottAuth.initialise();
   windowObject.GoHottData.subscribeToCheckIns(loadVenues, (status) => { if (status === 'CHANNEL_ERROR') el('#fresh').textContent = 'Refresh needed'; });
   windowObject.GoHottData.subscribeToLiveLooks(() => loadVenues());
   windowObject.addEventListener('online', () => loadVenues());

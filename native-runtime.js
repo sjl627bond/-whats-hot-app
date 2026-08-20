@@ -80,22 +80,28 @@
     } catch { return null; }
   }
 
+  function isAuthCallback(rawUrl) {
+    try { const url = new URL(rawUrl); return url.protocol === 'gohott:' && url.hostname === 'auth' && url.pathname === '/recovery'; }
+    catch { return false; }
+  }
+
+  function routeIncomingUrl(url) {
+    if (isAuthCallback(url)) { windowObject.dispatchEvent(new CustomEvent('gohott:auth-callback', { detail: { url } })); return; }
+    const hash = normaliseDeepLink(url);
+    if (!hash) return;
+    if (windowObject.location.hash === hash) windowObject.dispatchEvent(new CustomEvent('gohott:native-link', { detail: { hash } }));
+    else windowObject.location.hash = hash;
+  }
+
   function installNativeListeners() {
     if (!isNative || !plugins.App) return;
-    plugins.App.addListener('appUrlOpen', ({ url }) => {
-      const hash = normaliseDeepLink(url);
-      if (!hash) return;
-      if (windowObject.location.hash === hash) {
-        windowObject.dispatchEvent(new CustomEvent('gohott:native-link', { detail: { hash } }));
-        return;
-      }
-      windowObject.location.hash = hash;
-    });
+    plugins.App.addListener('appUrlOpen', ({ url }) => routeIncomingUrl(url));
+    plugins.App.getLaunchUrl?.().then((result) => { if (result?.url) routeIncomingUrl(result.url); }).catch(() => {});
     plugins.App.addListener('appStateChange', ({ isActive }) => {
       windowObject.dispatchEvent(new CustomEvent('gohott:native-app-state', { detail: { isActive } }));
     });
   }
 
   installNativeListeners();
-  windowObject.GoHottNative = Object.freeze({ isNative, pickPhoto, requestPosition, requestPushPermission, nativeShare, normaliseDeepLink });
+  windowObject.GoHottNative = Object.freeze({ isNative, pickPhoto, requestPosition, requestPushPermission, nativeShare, normaliseDeepLink, isAuthCallback });
 }(window));

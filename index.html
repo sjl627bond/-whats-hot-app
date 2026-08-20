@@ -108,7 +108,26 @@
     <div class="sheet auth-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-auth aria-label="Close">×</button>
       <p class="eyebrow">WELCOME TO GOHOTT</p><h2 id="auth-title">Sign in</h2><p class="sheet-copy">Save venues, build a profile, and submit proximity-assessed reports.</p>
       <form id="auth-form"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" minlength="6" autocomplete="current-password" required></label><button class="primary-button" type="submit">Sign in</button></form>
-      <button class="text-button" type="button" data-toggle-auth>Create an account instead</button><p class="form-message" id="auth-message" role="status"></p>
+      <button class="text-button" type="button" data-forgot-password>Forgot password?</button><button class="text-button" type="button" data-toggle-auth>Create an account instead</button><p class="form-message" id="auth-message" role="status"></p>
+    </div>
+  </div>
+
+  <div class="modal" id="password-recovery-modal" role="dialog" aria-modal="true" aria-labelledby="password-recovery-title" hidden>
+    <button class="modal-backdrop" type="button" data-close-password-recovery aria-label="Close password recovery"></button>
+    <div class="sheet auth-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-password-recovery aria-label="Close password recovery">×</button>
+      <p class="eyebrow">ACCOUNT RECOVERY</p><h2 id="password-recovery-title">Reset your password</h2>
+      <p class="sheet-copy" id="password-recovery-copy">Enter your account email and we’ll send a secure recovery link.</p>
+      <form id="password-recovery-request-form">
+        <label>Email<input type="email" name="email" autocomplete="email" required></label>
+        <button class="primary-button" type="submit">Send recovery email</button>
+      </form>
+      <form id="password-recovery-update-form" hidden>
+        <label>New password<input type="password" name="password" minlength="6" autocomplete="new-password" required></label>
+        <label>Confirm new password<input type="password" name="confirmation" minlength="6" autocomplete="new-password" required></label>
+        <button class="primary-button" type="submit">Set new password</button>
+      </form>
+      <button class="text-button" type="button" data-back-to-sign-in>Back to sign in</button>
+      <p class="form-message" id="password-recovery-message" role="status" aria-live="polite"></p>
     </div>
   </div>
 

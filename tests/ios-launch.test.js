@@ -12,6 +12,8 @@ const workspace = read('ios/App/App.xcworkspace/contents.xcworkspacedata');
 const runtime = read('native-runtime.js');
 const buildScript = read('scripts/build-web.mjs');
 const appCode = read('app.js');
+const shell = read('index.html');
+const authCode = read('auth.js');
 
 assert.equal(capacitor.appName, 'GoHott');
 assert.equal(capacitor.appId, 'com.placeholder.gohott');
@@ -31,6 +33,13 @@ assert.doesNotMatch(runtime, /camera\.getPhoto/);
 assert.match(buildScript, /vendor\/supabase\.js/);
 assert.match(buildScript, /vendor\/leaflet\/leaflet\.js/);
 assert.match(appCode, /addEventListener\('online', \(\) => loadVenues\(\)\)/);
+assert.match(shell, /data-forgot-password>Forgot password\?<\/button>/);
+assert.match(shell, /id="password-recovery-request-form"[\s\S]+id="password-recovery-update-form"/);
+assert.match(shell, /name="password" minlength="6" autocomplete="new-password"/);
+assert.match(authCode, /resetPasswordForEmail\(email, \{ redirectTo: recoveryRedirectUrl\(\) \}\)/);
+assert.match(authCode, /updateUser\(\{ password \}\)/);
+assert.match(authCode, /event === 'PASSWORD_RECOVERY'/);
+assert.match(plist, /<string>gohott<\/string>/);
 
 for (const [name, version] of Object.entries({ '@capacitor/core': '8.5.0', '@capacitor/camera': '8.2.3', '@capacitor/geolocation': '8.2.2', '@capacitor/push-notifications': '8.1.2' })) {
   assert.equal(packageJson.dependencies[name], version);
@@ -63,6 +72,11 @@ for (const [type, id] of [['venue', 'venue-1'], ['profile', 'user-2'], ['live-lo
   assert.equal(event.detail.hash, `#share/${type}/${id}`);
 }
 assert.equal(nativeEvents.length, 4);
+listeners.appUrlOpen({ url: 'gohott://auth/recovery#access_token=access&refresh_token=refresh&type=recovery' });
+const authEvent = nativeEvents.at(-1);
+assert.equal(authEvent.type, 'gohott:auth-callback');
+assert.equal(authEvent.detail.url, 'gohott://auth/recovery#access_token=access&refresh_token=refresh&type=recovery');
+assert.equal(window.GoHottNative.isAuthCallback('gohott://profile/user-9'), false);
 assert.match(appCode, /addEventListener\('gohott:native-link',[\s\S]*handleDeepLink\(event\.detail\?\.hash\)/);
 
 async function nativeRuntimeWith(overrides) {
