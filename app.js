@@ -3,6 +3,7 @@
   const state = { venues: [], checkIns: [], markets: [], liveLooks: [], liveLooksAvailable: false, selectedLiveLookFile: null, savedIds: new Set(), profile: null, socialTab: 'people', people: [], conversations: [], activeConversation: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle', pendingDeepLink: null };
   let lastFocusedElement = null;
   let unsubscribeSocial = null;
+  let liveLookPreviewUrl = null;
   const el = (selector) => documentObject.querySelector(selector);
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
   function safeHttpsUrl(value) { try { const url = new URL(value); return url.protocol === 'https:' ? url.href : ''; } catch { return ''; } }
@@ -263,16 +264,18 @@
   function openLiveLook(id) {
     state.currentVenue = venueById(id); if (!state.currentVenue) return;
     if (!user()) { openAuth('Sign in to add a temporary Live Look.'); return; }
-    lastFocusedElement = documentObject.activeElement; state.selectedLiveLookFile = null; el('#live-look-form').reset(); el('#live-look-preview').hidden = true; el('#live-look-message').textContent = state.liveLooksAvailable ? '' : 'Live Look is awaiting its reviewed Phase 4 database rollout.'; el('#caption-count').textContent = '0/80'; el('#live-look-modal').hidden = false; documentObject.body.classList.add('modal-open');
+    lastFocusedElement = documentObject.activeElement; state.selectedLiveLookFile = null; clearLiveLookPreview(); el('#live-look-form').reset(); el('#live-look-message').textContent = state.liveLooksAvailable ? '' : 'Live Look is awaiting its reviewed Phase 4 database rollout.'; el('#caption-count').textContent = '0/80'; el('#live-look-modal').hidden = false; documentObject.body.classList.add('modal-open');
   }
-  function closeLiveLook() { el('#live-look-modal').hidden = true; documentObject.body.classList.remove('modal-open'); state.selectedLiveLookFile = null; lastFocusedElement?.focus?.(); }
+  function clearLiveLookPreview() { if (liveLookPreviewUrl) { URL.revokeObjectURL(liveLookPreviewUrl); liveLookPreviewUrl = null; } const preview = el('#live-look-preview'); preview.removeAttribute('src'); preview.hidden = true; }
+  function closeLiveLook() { el('#live-look-modal').hidden = true; documentObject.body.classList.remove('modal-open'); state.selectedLiveLookFile = null; clearLiveLookPreview(); lastFocusedElement?.focus?.(); }
   function selectLiveLookFile(input) {
     const file = input.files?.[0]; if (!file) return;
     selectLiveLookFileValue(file); if (!state.selectedLiveLookFile) input.value = '';
   }
   function selectLiveLookFileValue(file) {
     if (!file) return;
-    try { windowObject.GoHottLiveLook.validateFile(file); state.selectedLiveLookFile = file; const preview = el('#live-look-preview'); preview.src = URL.createObjectURL(file); preview.hidden = false; el('#live-look-message').textContent = ''; }
+    clearLiveLookPreview();
+    try { windowObject.GoHottLiveLook.validateFile(file); state.selectedLiveLookFile = file; const preview = el('#live-look-preview'); liveLookPreviewUrl = URL.createObjectURL(file); preview.src = liveLookPreviewUrl; preview.hidden = false; el('#live-look-message').textContent = ''; }
     catch (error) { state.selectedLiveLookFile = null; el('#live-look-message').textContent = error.message; }
   }
   async function submitLiveLook(form) {
