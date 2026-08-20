@@ -1,5 +1,5 @@
-const CACHE_NAME = 'gohott-shell-v6-1';
-const APP_SHELL = ['./', './index.html', './offline.html', './privacy.html', './terms.html', './styles.css', './mobile.css', './config.js', './mobile.js', './observability.js', './live-look.js', './social.js', './supabase.js', './auth.js', './geo.js', './ranking.js', './map.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE_NAME = 'gohott-shell-ios-2';
+const APP_SHELL = ['./', './index.html', './offline.html', './privacy.html', './terms.html', './support.html', './privacy-choices.html', './styles.css', './mobile.css', './legal.css', './config.js', './native-runtime.js', './mobile.js', './observability.js', './live-look.js', './social.js', './supabase.js', './auth.js', './geo.js', './ranking.js', './map.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });

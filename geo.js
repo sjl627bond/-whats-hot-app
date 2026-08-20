@@ -10,6 +10,9 @@
     return Math.round(radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)));
   }
   function requestPosition() {
+    if (windowObject.GoHottNative?.isNative) {
+      return windowObject.GoHottNative.requestPosition().then((position) => { lastPosition = position; return position; });
+    }
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) { reject(Object.assign(new Error('Location is not available on this device.'), { code: 0 })); return; }
       navigator.geolocation.getCurrentPosition((position) => {

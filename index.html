@@ -88,7 +88,7 @@
     </nav>
   </div>
 
-  <footer class="legal-footer"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><button type="button" data-privacy-settings>Privacy settings</button></footer>
+  <footer class="legal-footer"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="support.html">Support</a><a href="privacy-choices.html">Delete Account</a></footer>
 
   <div class="modal" id="check-in-modal" role="dialog" aria-modal="true" aria-labelledby="check-in-title" hidden>
     <button class="modal-backdrop" type="button" data-close-modal aria-label="Close check-in"></button>
@@ -108,7 +108,45 @@
     <div class="sheet auth-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-auth aria-label="Close">×</button>
       <p class="eyebrow">WELCOME TO GOHOTT</p><h2 id="auth-title">Sign in</h2><p class="sheet-copy">Save venues, build a profile, and submit proximity-assessed reports.</p>
       <form id="auth-form"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" minlength="6" autocomplete="current-password" required></label><button class="primary-button" type="submit">Sign in</button></form>
-      <button class="text-button" type="button" data-toggle-auth>Create an account instead</button><p class="form-message" id="auth-message" role="status"></p>
+      <button class="text-button" type="button" data-forgot-password>Forgot password?</button><button class="text-button" type="button" data-toggle-auth>Create an account instead</button><p class="form-message" id="auth-message" role="status"></p>
+    </div>
+  </div>
+
+  <div class="modal" id="password-recovery-modal" role="dialog" aria-modal="true" aria-labelledby="password-recovery-title" hidden>
+    <button class="modal-backdrop" type="button" data-close-password-recovery aria-label="Close password recovery"></button>
+    <div class="sheet auth-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-password-recovery aria-label="Close password recovery">×</button>
+      <p class="eyebrow">ACCOUNT RECOVERY</p><h2 id="password-recovery-title">Reset your password</h2>
+      <p class="sheet-copy" id="password-recovery-copy">Enter your account email and we’ll send a secure recovery link.</p>
+      <form id="password-recovery-request-form">
+        <label>Email<input type="email" name="email" autocomplete="email" required></label>
+        <button class="primary-button" type="submit">Send recovery email</button>
+      </form>
+      <form id="password-recovery-update-form" hidden>
+        <label>New password<input type="password" name="password" minlength="6" autocomplete="new-password" required></label>
+        <label>Confirm new password<input type="password" name="confirmation" minlength="6" autocomplete="new-password" required></label>
+        <button class="primary-button" type="submit">Set new password</button>
+      </form>
+      <button class="text-button" type="button" data-back-to-sign-in>Back to sign in</button>
+      <p class="form-message" id="password-recovery-message" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="modal" id="delete-account-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description" hidden>
+    <button class="modal-backdrop" type="button" data-close-deletion aria-label="Cancel account deletion"></button>
+    <div class="sheet deletion-sheet"><div class="sheet-handle"></div><button class="close-button" type="button" data-close-deletion aria-label="Cancel account deletion">×</button>
+      <p class="eyebrow">ACCOUNT DELETION</p><h2 id="delete-account-title">Request deletion?</h2>
+      <div id="delete-account-description" class="deletion-explanation">
+        <p>This submits a protected request. It does not immediately delete your account.</p>
+        <p>After identity verification, a privileged backend worker is designed to remove your Auth account and associated profile, saves, follows, blocks, conversation participation, messages, plans, Live Looks, reactions, notifications, and other account-linked content.</p>
+        <p>Check-ins may remain without your account identifier. Safety, fraud-prevention, legal, and limited backup records may be retained or de-identified where required.</p>
+      </div>
+      <form id="delete-account-form">
+        <label class="deletion-password">Current password<input type="password" name="password" minlength="6" autocomplete="current-password" required></label>
+        <label class="confirmation-check"><input type="checkbox" name="confirmed" required> <span>I understand this is a deletion request and that completed deletion cannot be undone.</span></label>
+        <button class="primary-button danger-button" type="submit" disabled>Submit deletion request</button>
+        <button class="text-button" type="button" data-close-deletion>Keep my account</button>
+        <p class="form-message" id="deletion-message" role="status"></p>
+      </form>
     </div>
   </div>
 
@@ -118,7 +156,7 @@
       <p class="eyebrow">LIVE LOOK</p><h2 id="live-look-title">Show the scene now.</h2>
       <p class="sheet-copy">Temporary venue photos are location-assessed by GoHott. This is not proof of presence.</p>
       <form id="live-look-form">
-        <div class="photo-choices"><label class="secondary-button">Take photo<input name="camera" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment"></label><label class="secondary-button">Choose photo<input name="library" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"></label></div>
+        <div class="photo-choices"><label class="secondary-button" data-native-photo="camera">Take photo<input name="camera" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment"></label><label class="secondary-button" data-native-photo="photos">Choose photo<input name="library" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"></label></div>
         <img id="live-look-preview" class="live-look-preview" alt="Selected Live Look preview" hidden>
         <label>Caption <span id="caption-count">0/80</span><input name="caption" maxlength="80" placeholder="What’s happening?"></label>
         <fieldset><legend>Visible for</legend><div class="duration-grid"><label><input type="radio" name="duration" value="15_minutes">15 min</label><label><input type="radio" name="duration" value="30_minutes">30 min</label><label><input type="radio" name="duration" value="60_minutes" checked>60 min</label><label><input type="radio" name="duration" value="until_close">Until close*</label></div></fieldset>
@@ -130,6 +168,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-  <script src="config.js"></script><script src="mobile.js"></script><script src="observability.js"></script><script src="live-look.js"></script><script src="social.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
+  <script src="config.js"></script><script src="native-runtime.js"></script><script src="mobile.js"></script><script src="observability.js"></script><script src="live-look.js"></script><script src="social.js"></script><script src="supabase.js"></script><script src="auth.js"></script><script src="geo.js"></script><script src="ranking.js"></script><script src="map.js"></script><script src="app.js"></script>
 </body>
 </html>

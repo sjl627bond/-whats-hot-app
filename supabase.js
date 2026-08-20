@@ -100,14 +100,13 @@
   async function getAccountDeletionRequest(userId) {
     const result = await client.from('account_deletion_requests').select('status,requested_at').eq('user_id', userId).maybeSingle();
     if (result.error) return null;
-    return result.data;
+    return result.data?.status === 'processing' ? result.data : null;
   }
-  async function requestAccountDeletion(reason = null) {
-    const result = await client.from('account_deletion_requests').insert({ reason: reason || null }).select('status,requested_at').single();
-    if (result.error) {
-      if (result.error.code === '23505') throw new Error('An account deletion request is already pending.');
-      throw new Error('Account deletion requests require the Phase 3 database migration.');
-    }
+  async function requestAccountDeletion() {
+    const currentUser = windowObject.GoHottAuth?.getUser?.();
+    if (!currentUser?.id) throw new Error('Sign in to request account deletion.');
+    const result = await client.functions.invoke('delete-account', { body: { confirmation: true } });
+    if (result.error || !result.data?.deleted) throw new Error(result.data?.error || 'Account deletion could not be completed. Please retry.');
     return result.data;
   }
   async function requestDataExport() {
@@ -147,10 +146,16 @@
   function subscribeToLiveLooks(onChange) { return client.channel('gohott-live-looks').on('postgres_changes', { event: '*', schema: 'public', table: 'live_looks' }, onChange).subscribe(); }
 
   function socialUnavailable(error) { return /search_social_profiles|social_notifications|conversation_participants|nightlife_plans|schema cache|PGRST/i.test(error?.message || ''); }
-  async function searchPeople(query = '') {
-    const result = await client.rpc('search_social_profiles', { p_query: String(query).trim(), p_limit: 30 });
+  async function searchPeople(query = '', limit = 30) {
+    const result = await client.rpc('search_social_profiles', { p_query: String(query).trim(), p_limit: Math.min(Math.max(Number(limit) || 30, 1), 50) });
     if (result.error) { if (socialUnavailable(result.error)) return { available: false, people: [] }; throw new Error(result.error.message); }
     return { available: true, people: result.data || [] };
+  }
+  async function getSharedProfile(id) {
+    const currentId = windowObject.GoHottAuth?.getUser()?.id;
+    if (String(currentId || '') === String(id)) return getProfile(id);
+    const result = await searchPeople('', 50);
+    return result.people.find((profile) => String(profile.id) === String(id)) || null;
   }
   async function listConnections(kind) { const result = await client.rpc('list_social_connections', { p_kind: kind }); if (result.error) { if (socialUnavailable(result.error)) return []; throw new Error(result.error.message); } return result.data || []; }
   async function setFollow(targetId, follow) { const result = await client.rpc('set_follow_state', { p_target: targetId, p_follow: follow }); if (result.error) throw new Error(result.error.message); return result.data; }
@@ -172,6 +177,7 @@
   }
   async function markConversationRead(conversationId) { const result = await client.rpc('mark_conversation_read', { p_conversation: conversationId }); if (result.error) throw new Error(result.error.message); }
   async function setNightlifePlan(venueId, status, visibility) { windowObject.GoHottSocial.validatePlan(status, visibility); const result = await client.rpc('set_nightlife_plan', { p_venue: venueId, p_status: status, p_visibility: visibility }); if (result.error) throw new Error(result.error.message); return result.data; }
+  async function getNightlifePlan(id) { const result = await client.from('nightlife_plans').select('id,user_id,venue_id,plan_date,status,visibility,created_at,updated_at').eq('id', id).maybeSingle(); if (result.error) { if (socialUnavailable(result.error)) return null; throw new Error(result.error.message); } return result.data; }
   async function getVenuePlanSignal(venueId) { const result = await client.rpc('get_venue_plan_signal', { p_venue: venueId }); if (result.error) return null; return result.data; }
   async function reactToLiveLook(id, reaction) { const result = await client.rpc('set_live_look_reaction', { p_live_look: id, p_reaction: reaction }); if (result.error) throw new Error(result.error.message); return result.data; }
   async function getNotifications() { const result = await client.from('social_notifications').select('id,actor_id,notification_type,entity_type,entity_id,summary,created_at,read_at').order('created_at', { ascending: false }).limit(50); if (result.error) return []; return result.data || []; }
@@ -183,5 +189,5 @@
     return () => { client.removeChannel(notifications); if (messages) client.removeChannel(messages); };
   }
 
-  windowObject.GoHottData = Object.freeze({ client, getVenuesWithRecentCheckIns, createCheckIn, getSavedVenueIds, saveVenue, unsaveVenue, getProfile, saveProfile, getUserCheckIns, getAccountDeletionRequest, requestAccountDeletion, requestDataExport, subscribeToCheckIns, getActiveLiveLooks, uploadLiveLook, removeLiveLook, reportLiveLook, subscribeToLiveLooks, searchPeople, listConnections, setFollow, setBlock, startConversation, getConversations, getMessages, sendMessage, markConversationRead, setNightlifePlan, getVenuePlanSignal, reactToLiveLook, getNotifications, markNotificationsRead, reportSocialContent, subscribeToSocial });
+  windowObject.GoHottData = Object.freeze({ client, getVenuesWithRecentCheckIns, createCheckIn, getSavedVenueIds, saveVenue, unsaveVenue, getProfile, getSharedProfile, saveProfile, getUserCheckIns, getAccountDeletionRequest, requestAccountDeletion, requestDataExport, subscribeToCheckIns, getActiveLiveLooks, uploadLiveLook, removeLiveLook, reportLiveLook, subscribeToLiveLooks, searchPeople, listConnections, setFollow, setBlock, startConversation, getConversations, getMessages, sendMessage, markConversationRead, setNightlifePlan, getNightlifePlan, getVenuePlanSignal, reactToLiveLook, getNotifications, markNotificationsRead, reportSocialContent, subscribeToSocial });
 }(window));

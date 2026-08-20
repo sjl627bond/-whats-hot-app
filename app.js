@@ -1,8 +1,9 @@
 (function initialiseApp(windowObject, documentObject) {
   'use strict';
-  const state = { venues: [], checkIns: [], markets: [], liveLooks: [], liveLooksAvailable: false, selectedLiveLookFile: null, savedIds: new Set(), profile: null, socialTab: 'people', people: [], conversations: [], activeConversation: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle' };
+  const state = { venues: [], checkIns: [], markets: [], liveLooks: [], liveLooksAvailable: false, selectedLiveLookFile: null, savedIds: new Set(), profile: null, socialTab: 'people', people: [], conversations: [], activeConversation: null, currentVenue: null, currentCity: 'Sarasota', route: 'discover', previousRoute: 'discover', loading: false, authMode: 'signin', position: null, locationStatus: 'idle', pendingDeepLink: null };
   let lastFocusedElement = null;
   let unsubscribeSocial = null;
+  let liveLookPreviewUrl = null;
   const el = (selector) => documentObject.querySelector(selector);
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
   function safeHttpsUrl(value) { try { const url = new URL(value); return url.protocol === 'https:' ? url.href : ''; } catch { return ''; } }
@@ -91,16 +92,16 @@
     state.route = route; documentObject.querySelectorAll('[data-screen]').forEach((screen) => { screen.hidden = screen.dataset.screen !== route; });
     documentObject.querySelectorAll('.nav-item').forEach((button) => { const active = button.dataset.route === route || (route === 'venue' && button.dataset.route === state.previousRoute); button.classList.toggle('is-active', active); if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
     if (!options.skipHash) windowObject.location.hash = route === 'venue' && state.currentVenue ? `venue/${state.currentVenue.id}` : route;
-    if (route === 'map') renderMap(); if (route === 'saved') renderSaved(); if (route === 'social') renderSocial(); if (route === 'profile') renderProfile(); windowObject.scrollTo({ top: 0, behavior: 'instant' });
+    if (!options.skipRender) { if (route === 'map') renderMap(); if (route === 'saved') renderSaved(); if (route === 'social') renderSocial(); if (route === 'profile') renderProfile(); } windowObject.scrollTo({ top: 0, behavior: 'instant' });
   }
-  function handleDeepLink() {
-    const deepLink = windowObject.GoHottMobile.parseDeepLink();
-    if (!deepLink) return false;
-    if (deepLink.type === 'venue' && venueById(deepLink.id)) { openVenue(deepLink.id); return true; }
-    if (deepLink.type === 'profile') { navigate('social', { skipHash: true }); return true; }
-    const look = state.liveLooks.find((item) => String(item.id) === deepLink.id);
-    if (look?.venue_id && venueById(look.venue_id)) { openVenue(look.venue_id); return true; }
-    navigate('discover', { skipHash: true }); return true;
+  function handleDeepLink(value = windowObject.location.hash) {
+    const destination = windowObject.GoHottMobile.resolveDeepLink(value, { venues: state.venues, liveLooks: state.liveLooks });
+    if (!destination) return false;
+    if (destination.route === 'venue') { state.pendingDeepLink = null; openVenue(destination.venueId); }
+    else if (destination.view === 'profile') { state.pendingDeepLink = value; openSharedProfile(destination.id); }
+    else if (destination.view === 'plan') { state.pendingDeepLink = value; openSharedPlan(destination.id); }
+    else { navigate('discover', { skipHash: true }); showNotice(el('#error-region'), 'This shared item is unavailable or no longer active.', 'error'); }
+    return true;
   }
   function openVenue(id) { const venue = venueById(id); if (!venue) return; state.currentVenue = venue; renderVenueDetail(id); navigate('venue'); }
   function renderVenueDetail(id) {
@@ -116,7 +117,28 @@
 
   function openAuth(context = '') { lastFocusedElement = documentObject.activeElement; el('#auth-modal').hidden = false; documentObject.body.classList.add('modal-open'); el('#auth-message').textContent = context; setTimeout(() => el('#auth-form input').focus(), 0); }
   function closeAuth() { el('#auth-modal').hidden = true; documentObject.body.classList.remove('modal-open'); lastFocusedElement?.focus?.(); }
-  function renderAuthMode() { const signup = state.authMode === 'signup'; el('#auth-title').textContent = signup ? 'Create account' : 'Sign in'; el('#auth-form button').textContent = signup ? 'Create account' : 'Sign in'; el('[data-toggle-auth]').textContent = signup ? 'Already have an account? Sign in' : 'Create an account instead'; el('#auth-form [name="password"]').autocomplete = signup ? 'new-password' : 'current-password'; }
+  function renderAuthMode() { const signup = state.authMode === 'signup'; el('#auth-title').textContent = signup ? 'Create account' : 'Sign in'; el('#auth-form button').textContent = signup ? 'Create account' : 'Sign in'; el('[data-toggle-auth]').textContent = signup ? 'Already have an account? Sign in' : 'Create an account instead'; el('[data-forgot-password]').hidden = signup; el('#auth-form [name="password"]').autocomplete = signup ? 'new-password' : 'current-password'; }
+  function openPasswordRecovery(mode = 'request') {
+    closeAuth(); const modal = el('#password-recovery-modal'); const requestForm = el('#password-recovery-request-form'); const updateForm = el('#password-recovery-update-form');
+    const updating = mode === 'update'; requestForm.hidden = updating; updateForm.hidden = !updating; el('#password-recovery-title').textContent = updating ? 'Set a new password' : 'Reset your password'; el('#password-recovery-copy').textContent = updating ? 'Choose a new password for your GoHott account.' : 'Enter your account email and we’ll send a secure recovery link.'; el('#password-recovery-message').textContent = ''; modal.hidden = false; documentObject.body.classList.add('modal-open'); setTimeout(() => (updating ? updateForm : requestForm).querySelector('input').focus(), 0);
+  }
+  function closePasswordRecovery() { el('#password-recovery-modal').hidden = true; documentObject.body.classList.remove('modal-open'); }
+  async function requestPasswordRecovery(form) {
+    const submit = form.querySelector('[type="submit"]'); const message = el('#password-recovery-message'); submit.disabled = true; message.textContent = 'Sending a secure recovery email…';
+    try { await windowObject.GoHottAuth.requestPasswordReset(new FormData(form).get('email')); message.textContent = 'If an account exists for that email, a recovery link is on its way.'; }
+    catch (error) { message.textContent = friendlyAuthError(error.message); } finally { submit.disabled = false; }
+  }
+  async function updateRecoveredPassword(form) {
+    const submit = form.querySelector('[type="submit"]'); const message = el('#password-recovery-message'); const data = new FormData(form); const password = String(data.get('password') || '');
+    if (password !== data.get('confirmation')) { message.textContent = 'Passwords do not match.'; return; }
+    submit.disabled = true; message.textContent = 'Updating your password…';
+    try { await windowObject.GoHottAuth.updatePassword(password); message.textContent = 'Password updated. You’re securely signed in.'; form.reset(); setTimeout(closePasswordRecovery, 900); }
+    catch (error) { message.textContent = friendlyAuthError(error.message); } finally { submit.disabled = false; }
+  }
+  function onPasswordRecovery(detail) {
+    if (detail.status === 'ready') openPasswordRecovery('update');
+    else if (detail.status === 'error') { openPasswordRecovery('request'); el('#password-recovery-message').textContent = detail.message; }
+  }
   async function handleAuthSubmit(form) {
     const message = el('#auth-message'); const submit = form.querySelector('button[type="submit"]'); submit.disabled = true; message.textContent = state.authMode === 'signup' ? 'Creating your account…' : 'Signing you in…';
     try { const data = new FormData(form); if (state.authMode === 'signup') { const result = await windowObject.GoHottAuth.signUp(data.get('email'), data.get('password')); message.textContent = result.needsConfirmation ? 'Check your email to confirm your account.' : 'Account created.'; if (!result.needsConfirmation) closeAuth(); } else { await windowObject.GoHottAuth.signIn(data.get('email'), data.get('password')); closeAuth(); } }
@@ -129,7 +151,7 @@
     if (currentUser) { try { const [ids, profile] = await Promise.all([windowObject.GoHottData.getSavedVenueIds(currentUser.id), windowObject.GoHottData.getProfile(currentUser.id)]); state.savedIds = new Set(ids); state.profile = profile; } catch (error) { console.info(error.message); } }
     el('[data-account-label]').textContent = currentUser ? (state.profile?.display_name || currentUser.email?.split('@')[0] || 'Profile') : 'Sign in';
     if (currentUser) unsubscribeSocial = windowObject.GoHottData.subscribeToSocial(currentUser.id, state.activeConversation, () => { if (state.route === 'social') renderSocial(); });
-    renderDiscover(); if (state.route === 'profile') renderProfile(); if (state.route === 'saved') renderSaved(); if (state.route === 'social') renderSocial();
+    renderDiscover(); if (state.pendingDeepLink) handleDeepLink(state.pendingDeepLink); else { if (state.route === 'profile') renderProfile(); if (state.route === 'saved') renderSaved(); if (state.route === 'social') renderSocial(); }
   }
 
   async function toggleSave(id) {
@@ -145,9 +167,21 @@
   function socialTabs() {
     return `<div class="social-tabs" role="tablist" aria-label="Social sections">${['people', 'feed', 'chats'].map((tab) => `<button type="button" role="tab" data-social-tab="${tab}" aria-selected="${state.socialTab === tab}" class="${state.socialTab === tab ? 'is-active' : ''}">${tab[0].toUpperCase() + tab.slice(1)}</button>`).join('')}</div>`;
   }
-  function personCard(person) {
+  function personCard(person, { actions = true } = {}) {
     const avatar = safeHttpsUrl(person.avatar_url);
-    return `<article class="person-card"><div class="social-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml((person.display_name || person.username || 'G')[0].toUpperCase())}</div><div class="person-copy"><strong>${escapeHtml(person.display_name || person.username || 'GoHott member')}${person.is_mutual ? ' · Mutual' : ''}</strong><span>${person.username ? `@${escapeHtml(person.username)} · ` : ''}${escapeHtml(person.home_city || '')}</span><span>${escapeHtml(person.bio || '')}</span><span>${escapeHtml(person.follower_count || 0)} followers · ${escapeHtml(person.following_count || 0)} following</span></div><div class="person-actions"><button type="button" data-follow="${escapeHtml(person.id)}" data-following="${person.is_following}">${person.is_following ? 'Following' : 'Follow'}</button><button type="button" data-message-person="${escapeHtml(person.id)}">Message</button><button type="button" data-share-profile="${escapeHtml(person.id)}" data-share-label="${escapeHtml(person.display_name || person.username || 'GoHott profile')}" aria-label="Share profile">↗</button><button type="button" data-report-profile="${escapeHtml(person.id)}" aria-label="Report profile">!</button><button type="button" data-block-person="${escapeHtml(person.id)}" aria-label="Block profile">Block</button></div></article>`;
+    return `<article class="person-card"><div class="social-avatar">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml((person.display_name || person.username || 'G')[0].toUpperCase())}</div><div class="person-copy"><strong>${escapeHtml(person.display_name || person.username || 'GoHott member')}${person.is_mutual ? ' · Mutual' : ''}</strong><span>${person.username ? `@${escapeHtml(person.username)} · ` : ''}${escapeHtml(person.home_city || '')}</span><span>${escapeHtml(person.bio || '')}</span><span>${escapeHtml(person.follower_count || 0)} followers · ${escapeHtml(person.following_count || 0)} following</span></div>${actions ? `<div class="person-actions"><button type="button" data-follow="${escapeHtml(person.id)}" data-following="${person.is_following}">${person.is_following ? 'Following' : 'Follow'}</button><button type="button" data-message-person="${escapeHtml(person.id)}">Message</button><button type="button" data-share-profile="${escapeHtml(person.id)}" data-share-label="${escapeHtml(person.display_name || person.username || 'GoHott profile')}" aria-label="Share profile">↗</button><button type="button" data-report-profile="${escapeHtml(person.id)}" aria-label="Report profile">!</button><button type="button" data-block-person="${escapeHtml(person.id)}" aria-label="Block profile">Block</button></div>` : ''}</article>`;
+  }
+  async function openSharedProfile(id) {
+    navigate('social', { skipHash: true, skipRender: true }); const container = el('#social-content');
+    container.innerHTML = '<div class="loading"><span></span>Loading profile…</div>';
+    try { const profile = await windowObject.GoHottData.getSharedProfile(id); if (state.route !== 'social') return; state.pendingDeepLink = null; const isSelf = String(user()?.id || '') === String(profile?.id || ''); container.innerHTML = profile ? `<button class="text-button" type="button" data-social-tab="people">← People</button><div class="social-panel-title"><h2>Shared profile</h2></div>${personCard(profile, { actions: !isSelf })}` : '<div class="state-card">This profile is private, blocked, or unavailable.</div>'; }
+    catch (error) { if (state.route === 'social') container.innerHTML = `<div class="state-card error">${escapeHtml(error.message)}</div>`; }
+  }
+  async function openSharedPlan(id) {
+    navigate('social', { skipHash: true, skipRender: true }); const container = el('#social-content');
+    container.innerHTML = '<div class="loading"><span></span>Loading plan…</div>';
+    try { const plan = await windowObject.GoHottData.getNightlifePlan(id); if (state.route !== 'social') return; state.pendingDeepLink = null; const venue = plan && venueById(plan.venue_id); container.innerHTML = plan ? `<button class="text-button" type="button" data-social-tab="feed">← Activity</button><article class="plan-card"><p class="eyebrow">SHARED NIGHTLIFE PLAN</p><h2>${escapeHtml(plan.status[0].toUpperCase() + plan.status.slice(1))}${venue ? ` · ${escapeHtml(venue.name)}` : ''}</h2><p>${escapeHtml(plan.plan_date)} · ${escapeHtml(plan.visibility)}</p>${venue ? `<button class="secondary-button" type="button" data-venue="${escapeHtml(venue.id)}">Open venue</button>` : ''}</article>` : '<div class="state-card">This plan is private, blocked, expired, or unavailable.</div>'; }
+    catch (error) { if (state.route === 'social') container.innerHTML = `<div class="state-card error">${escapeHtml(error.message)}</div>`; }
   }
   async function renderSocial(tab = state.socialTab) {
     state.socialTab = tab; const container = el('#social-content');
@@ -180,17 +214,25 @@
   async function renderProfile() {
     const container = el('#profile-content'); const currentUser = user(); if (!currentUser) { container.innerHTML = '<div class="state-card auth-required"><span>◉</span><h2>Your nights, remembered.</h2><p>Sign in to manage your profile and account activity.</p><button class="primary-button" type="button" data-open-auth>Sign in or create account</button></div>'; return; }
     const [history, deletionRequest] = await Promise.all([windowObject.GoHottData.getUserCheckIns(currentUser.id), windowObject.GoHottData.getAccountDeletionRequest(currentUser.id)]);
-    container.innerHTML = `<div class="profile-card"><div class="avatar-large">${escapeHtml((state.profile?.display_name || currentUser.email || 'G')[0].toUpperCase())}</div><div><strong>${escapeHtml(state.profile?.display_name || 'Night owl')}</strong><span>${escapeHtml(currentUser.email || '')}</span></div></div><form class="profile-form" id="profile-form"><label>Display name<input name="display_name" maxlength="60" value="${escapeHtml(state.profile?.display_name || '')}" placeholder="How friends see you"></label><label>Home city<select name="home_city"><option value="">Choose a city</option><option value="Sarasota" ${state.profile?.home_city === 'Sarasota' ? 'selected' : ''}>Sarasota</option><option value="Tampa Bay" ${state.profile?.home_city === 'Tampa Bay' ? 'selected' : ''}>Tampa Bay</option></select></label><button class="primary-button" type="submit">Save profile</button><p class="form-message" id="profile-message"></p></form><div class="profile-stats"><div><strong>${state.savedIds.size}</strong><span>Saved</span></div><div><strong>${history.length}</strong><span>Reports</span></div></div><section class="reports"><div class="section-heading"><div><p class="eyebrow">ACTIVITY</p><h2>Recent check-ins</h2></div></div>${history.length ? history.map((report) => { const venue = venueById(report.venue_id); return `<div class="report-row"><span>●</span><div><strong>${escapeHtml(venue?.name || 'Venue')}</strong><small>${escapeHtml(report.vibe)} · ${readableTime(report.created_at)}${reportTrustLabel(report)}</small></div></div>`; }).join('') : '<div class="state-card">No account activity yet.</div>'}</section><section class="privacy-card"><p class="eyebrow">PRIVACY</p><h2>Account controls</h2><p>Your profile and saved venues are private to your account. Precise location evidence is never shown publicly.</p><div class="account-actions"><button class="secondary-button" type="button" data-request-export>Request my data</button><button class="secondary-button" type="button" data-notification-settings>Notification preferences</button><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></div>${deletionRequest ? `<div class="request-status">Deletion request: ${escapeHtml(deletionRequest.status)}</div>` : '<button class="text-button danger" type="button" data-request-deletion>Request account deletion</button>'}<p class="form-message" id="privacy-message" role="status"></p></section><button class="text-button" type="button" data-sign-out>Sign out</button>`;
+    container.innerHTML = `<div class="profile-card"><div class="avatar-large">${escapeHtml((state.profile?.display_name || currentUser.email || 'G')[0].toUpperCase())}</div><div><strong>${escapeHtml(state.profile?.display_name || 'Night owl')}</strong><span>${escapeHtml(currentUser.email || '')}</span></div></div><form class="profile-form" id="profile-form"><label>Display name<input name="display_name" maxlength="60" value="${escapeHtml(state.profile?.display_name || '')}" placeholder="How friends see you"></label><label>Home city<select name="home_city"><option value="">Choose a city</option><option value="Sarasota" ${state.profile?.home_city === 'Sarasota' ? 'selected' : ''}>Sarasota</option><option value="Tampa Bay" ${state.profile?.home_city === 'Tampa Bay' ? 'selected' : ''}>Tampa Bay</option></select></label><button class="primary-button" type="submit">Save profile</button><p class="form-message" id="profile-message"></p></form><div class="profile-stats"><div><strong>${state.savedIds.size}</strong><span>Saved</span></div><div><strong>${history.length}</strong><span>Reports</span></div></div><section class="reports"><div class="section-heading"><div><p class="eyebrow">ACTIVITY</p><h2>Recent check-ins</h2></div></div>${history.length ? history.map((report) => { const venue = venueById(report.venue_id); return `<div class="report-row"><span>●</span><div><strong>${escapeHtml(venue?.name || 'Venue')}</strong><small>${escapeHtml(report.vibe)} · ${readableTime(report.created_at)}${reportTrustLabel(report)}</small></div></div>`; }).join('') : '<div class="state-card">No account activity yet.</div>'}</section><section class="privacy-card"><p class="eyebrow">SETTINGS &amp; PRIVACY</p><h2>Your controls</h2><p>Manage what you share, device permissions, account requests, and support.</p><div class="privacy-settings-list"><div><strong>Profile visibility</strong><span>Choose Public, Followers, or Private in your profile form above.</span></div><div><strong>Location</strong><span>Optional for distances and server-assessed proximity. Revoke access in iOS Settings or browser site settings.</span></div><div><strong>Camera &amp; Photos</strong><span>Used only when you choose media for a Live Look. Manage access in iOS Settings.</span></div><div><strong>Blocking</strong><span>Block accounts from Social → People to stop supported interactions and messaging.</span></div></div><div class="account-actions"><button class="secondary-button" type="button" data-request-export>Request my data</button><button class="secondary-button" type="button" data-notification-settings>Notification preferences</button><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms of Use</a><a href="support.html">Support</a><a href="privacy-choices.html">Privacy Choices</a><button class="secondary-button danger-outline" type="button" data-request-deletion ${deletionRequest ? 'disabled' : ''}>Delete Account</button><button class="secondary-button" type="button" data-sign-out>Sign Out</button></div>${deletionRequest ? `<div class="request-status">Deletion request: ${escapeHtml(deletionRequest.status)} · Completion requires the protected account-deletion worker.</div>` : ''}<p class="form-message" id="privacy-message" role="status"></p></section>`;
     el('#profile-form button[type="submit"]').insertAdjacentHTML('beforebegin', `<div class="profile-social-grid"><label>Username<input name="username" maxlength="24" value="${escapeHtml(state.profile?.username || '')}" placeholder="nightowl"></label><label>Avatar URL<input name="avatar_url" type="url" value="${escapeHtml(state.profile?.avatar_url || '')}" placeholder="https://…"></label><label>Bio<textarea name="bio" maxlength="160" placeholder="Your nightlife vibe">${escapeHtml(state.profile?.bio || '')}</textarea></label><label>Favorite categories<input name="favorite_categories" value="${escapeHtml((state.profile?.favorite_categories || []).join(', '))}" placeholder="Dance, live music"></label><label>Profile visibility<select name="profile_visibility"><option value="public">Public</option><option value="followers" ${state.profile?.profile_visibility === 'followers' ? 'selected' : ''}>Followers</option><option value="private" ${state.profile?.profile_visibility === 'private' ? 'selected' : ''}>Private</option></select></label><label>Who can message<select name="message_permission"><option value="everyone">Everyone</option><option value="followers" ${state.profile?.message_permission !== 'everyone' ? 'selected' : ''}>People you follow</option><option value="mutuals" ${state.profile?.message_permission === 'mutuals' ? 'selected' : ''}>Mutual follows</option><option value="nobody" ${state.profile?.message_permission === 'nobody' ? 'selected' : ''}>Nobody</option></select></label><p class="privacy-note">Your plan visibility is chosen per venue. GoHott never turns a plan into proof of current presence.</p></div>`);
   }
   async function saveProfile(form) { const data = new FormData(form); const message = el('#profile-message'); message.textContent = 'Saving…'; try { const username = data.get('username') ? windowObject.GoHottSocial.normaliseUsername(data.get('username')) : null; const avatarUrl = data.get('avatar_url').trim(); if (avatarUrl && !safeHttpsUrl(avatarUrl)) throw new Error('Avatar URL must use HTTPS.'); state.profile = await windowObject.GoHottData.saveProfile({ id: user().id, display_name: data.get('display_name').trim() || null, home_city: data.get('home_city') || null, username, avatar_url: avatarUrl || null, bio: windowObject.GoHottSocial.validateBio(data.get('bio')), favorite_categories: data.get('favorite_categories').split(',').map((item) => item.trim()).filter(Boolean).slice(0, 12), profile_visibility: data.get('profile_visibility'), message_permission: data.get('message_permission') }); message.textContent = state.profile.social_settings_pending ? 'Core profile saved. Social settings await the reviewed Phase 5 migration.' : 'Profile saved.'; if (!state.profile.social_settings_pending) onAuthChanged(); } catch (error) { message.textContent = error.message; } }
-  async function requestDeletion() {
-    const message = el('#privacy-message'); if (!message) return;
-    if (!windowObject.confirm('Request account deletion? This records a request for a privileged backend process; it does not delete data immediately.')) return;
-    message.textContent = 'Submitting a deletion request…';
-    try { await windowObject.GoHottData.requestAccountDeletion(); message.textContent = 'Request received. A privileged backend process must complete deletion and session revocation.'; }
-    catch (error) { message.textContent = error.message; }
+  function openDeletion() {
+    if (!user()) return openAuth('Sign in to manage account deletion.');
+    lastFocusedElement = documentObject.activeElement; const modal = el('#delete-account-modal'); const form = el('#delete-account-form');
+    form.reset(); form.querySelector('[type="submit"]').disabled = true; el('#deletion-message').textContent = ''; modal.hidden = false; documentObject.body.classList.add('modal-open'); form.elements.password.focus();
   }
+  function closeDeletion() { el('#delete-account-modal').hidden = true; documentObject.body.classList.remove('modal-open'); lastFocusedElement?.focus?.(); }
+  async function requestDeletion(form) {
+    const message = el('#deletion-message'); const submit = form.querySelector('[type="submit"]');
+    if (!user()) { message.textContent = 'Your session has expired. Sign in again to request deletion.'; return; }
+    if (!form.elements.confirmed.checked) { message.textContent = 'Confirm that you understand before continuing.'; return; }
+    submit.disabled = true; message.textContent = 'Verifying your identity…';
+    try { await windowObject.GoHottAuth.reauthenticate(form.elements.password.value); message.textContent = 'Deleting your account and associated data…'; await windowObject.GoHottData.requestAccountDeletion(); message.textContent = 'Account deleted. Signing out…'; await windowObject.GoHottAuth.completeAccountDeletion(); setTimeout(() => { closeDeletion(); navigate('discover'); }, 700); }
+    catch (error) { message.textContent = error.message; submit.disabled = false; }
+  }
+  async function signOut(button) { const message = el('#privacy-message'); button.disabled = true; if (message) message.textContent = 'Signing out…'; try { await windowObject.GoHottAuth.signOut(); } catch (error) { if (message) message.textContent = error.message; button.disabled = false; } }
   async function requestExport() {
     const message = el('#privacy-message'); message.textContent = 'Submitting an export request…';
     try { await windowObject.GoHottData.requestDataExport(); message.textContent = 'Export requested. You will be notified when the secure download is ready.'; }
@@ -198,7 +240,12 @@
   }
   async function notificationSettings() {
     const capability = windowObject.GoHottMobile.notificationCapability(); const message = el('#privacy-message');
-    message.textContent = capability.available ? 'Notification delivery is ready for native/APNs configuration. In-app activity notifications remain available.' : 'Push notifications are not available in this browser. In-app activity notifications remain available.';
+    if (windowObject.GoHottNative?.isNative) {
+      try { const result = await windowObject.GoHottNative.requestPushPermission(); message.textContent = result.status === 'denied' ? 'Notifications remain off. You can enable them later in iOS Settings.' : 'Notification permission is ready. Device delivery starts after the private APNs backend is configured.'; }
+      catch { message.textContent = 'Push registration is awaiting Apple signing and the private APNs backend. In-app notifications remain available.'; }
+      return;
+    }
+    message.textContent = capability.available ? 'Web notification delivery is supported but not enabled yet. In-app activity notifications remain available.' : 'Push notifications are not available in this browser. In-app activity notifications remain available.';
   }
 
   async function openCheckIn(id) {
@@ -217,13 +264,19 @@
   function openLiveLook(id) {
     state.currentVenue = venueById(id); if (!state.currentVenue) return;
     if (!user()) { openAuth('Sign in to add a temporary Live Look.'); return; }
-    lastFocusedElement = documentObject.activeElement; state.selectedLiveLookFile = null; el('#live-look-form').reset(); el('#live-look-preview').hidden = true; el('#live-look-message').textContent = state.liveLooksAvailable ? '' : 'Live Look is awaiting its reviewed Phase 4 database rollout.'; el('#caption-count').textContent = '0/80'; el('#live-look-modal').hidden = false; documentObject.body.classList.add('modal-open');
+    lastFocusedElement = documentObject.activeElement; state.selectedLiveLookFile = null; clearLiveLookPreview(); el('#live-look-form').reset(); el('#live-look-message').textContent = state.liveLooksAvailable ? '' : 'Live Look is awaiting its reviewed Phase 4 database rollout.'; el('#caption-count').textContent = '0/80'; el('#live-look-modal').hidden = false; documentObject.body.classList.add('modal-open');
   }
-  function closeLiveLook() { el('#live-look-modal').hidden = true; documentObject.body.classList.remove('modal-open'); state.selectedLiveLookFile = null; lastFocusedElement?.focus?.(); }
+  function clearLiveLookPreview() { if (liveLookPreviewUrl) { URL.revokeObjectURL(liveLookPreviewUrl); liveLookPreviewUrl = null; } const preview = el('#live-look-preview'); preview.removeAttribute('src'); preview.hidden = true; }
+  function closeLiveLook() { el('#live-look-modal').hidden = true; documentObject.body.classList.remove('modal-open'); state.selectedLiveLookFile = null; clearLiveLookPreview(); lastFocusedElement?.focus?.(); }
   function selectLiveLookFile(input) {
     const file = input.files?.[0]; if (!file) return;
-    try { windowObject.GoHottLiveLook.validateFile(file); state.selectedLiveLookFile = file; const preview = el('#live-look-preview'); preview.src = URL.createObjectURL(file); preview.hidden = false; el('#live-look-message').textContent = ''; }
-    catch (error) { input.value = ''; state.selectedLiveLookFile = null; el('#live-look-message').textContent = error.message; }
+    selectLiveLookFileValue(file); if (!state.selectedLiveLookFile) input.value = '';
+  }
+  function selectLiveLookFileValue(file) {
+    if (!file) return;
+    clearLiveLookPreview();
+    try { windowObject.GoHottLiveLook.validateFile(file); state.selectedLiveLookFile = file; const preview = el('#live-look-preview'); liveLookPreviewUrl = URL.createObjectURL(file); preview.src = liveLookPreviewUrl; preview.hidden = false; el('#live-look-message').textContent = ''; }
+    catch (error) { state.selectedLiveLookFile = null; el('#live-look-message').textContent = error.message; }
   }
   async function submitLiveLook(form) {
     const submit = form.querySelector('[type="submit"]'); if (!state.selectedLiveLookFile) { el('#live-look-message').textContent = 'Choose or take a photo first.'; return; }
@@ -238,6 +291,8 @@
   async function reportLiveLook(id) { const reason = windowObject.prompt('Report reason: spam, unsafe, privacy, misleading, or other'); if (!reason) return; try { await windowObject.GoHottData.reportLiveLook(id, reason.trim().toLowerCase()); windowObject.alert('Report received. Thank you.'); } catch (error) { windowObject.alert(error.message); } }
 
   documentObject.addEventListener('click', (event) => {
+    const nativePhoto = event.target.closest('[data-native-photo]');
+    if (nativePhoto && windowObject.GoHottNative?.isNative) { event.preventDefault(); windowObject.GoHottNative.pickPhoto(nativePhoto.dataset.nativePhoto).then(selectLiveLookFileValue).catch((error) => { if (!/cancel/i.test(error.message || '')) el('#live-look-message').textContent = error.message; }); return; }
     const route = event.target.closest('[data-route]'); if (route) { event.preventDefault(); navigate(route.dataset.route); }
     const city = event.target.closest('[data-city]'); if (city) setCity(city.dataset.city);
     const venue = event.target.closest('[data-venue]'); if (venue) openVenue(venue.dataset.venue);
@@ -247,7 +302,10 @@
     if (event.target.closest('[data-location]')) useLocation(); if (event.target.closest('[data-account]')) user() ? navigate('profile') : openAuth();
     if (event.target.closest('[data-open-auth]')) openAuth(); if (event.target.closest('[data-close-auth]')) closeAuth(); if (event.target.closest('[data-close-modal]')) closeCheckIn();
     if (event.target.closest('[data-toggle-auth]')) { state.authMode = state.authMode === 'signin' ? 'signup' : 'signin'; renderAuthMode(); el('#auth-message').textContent = ''; }
-    if (event.target.closest('[data-sign-out]')) windowObject.GoHottAuth.signOut(); if (event.target.closest('[data-request-deletion]')) requestDeletion(); if (event.target.closest('[data-request-export]')) requestExport(); if (event.target.closest('[data-notification-settings]')) notificationSettings(); if (event.target.closest('[data-privacy-settings]')) navigate('profile'); if (event.target.closest('[data-back]')) navigate(state.previousRoute || 'discover');
+    if (event.target.closest('[data-forgot-password]')) { const email = el('#auth-form [name="email"]').value; openPasswordRecovery('request'); el('#password-recovery-request-form [name="email"]').value = email; }
+    if (event.target.closest('[data-close-password-recovery]')) closePasswordRecovery();
+    if (event.target.closest('[data-back-to-sign-in]')) { closePasswordRecovery(); state.authMode = 'signin'; renderAuthMode(); openAuth(); }
+    const signOutButton = event.target.closest('[data-sign-out]'); if (signOutButton) signOut(signOutButton); if (event.target.closest('[data-request-deletion]')) openDeletion(); if (event.target.closest('[data-close-deletion]')) closeDeletion(); if (event.target.closest('[data-request-export]')) requestExport(); if (event.target.closest('[data-notification-settings]')) notificationSettings(); if (event.target.closest('[data-privacy-settings]')) navigate('profile'); if (event.target.closest('[data-back]')) navigate(state.previousRoute || 'discover');
     const addLook = event.target.closest('[data-add-live-look]'); if (addLook) openLiveLook(addLook.dataset.addLiveLook);
     const removeLook = event.target.closest('[data-remove-live-look]'); if (removeLook) removeLiveLook(removeLook.dataset.removeLiveLook);
     const reportLook = event.target.closest('[data-report-live-look]'); if (reportLook) reportLiveLook(reportLook.dataset.reportLiveLook);
@@ -264,15 +322,17 @@
     const reaction = event.target.closest('[data-react-look]'); if (reaction) reactLook(reaction);
     if (event.target.closest('[data-mark-read]')) windowObject.GoHottData.markNotificationsRead().then(() => renderSocial('feed')).catch((error) => windowObject.alert(error.message));
   });
-  documentObject.addEventListener('change', (event) => { if (event.target.matches('#live-look-form input[type="file"]')) selectLiveLookFile(event.target); });
+  documentObject.addEventListener('change', (event) => { if (event.target.matches('#live-look-form input[type="file"]')) selectLiveLookFile(event.target); if (event.target.matches('#delete-account-form [name="confirmed"]')) el('#delete-account-form [type="submit"]').disabled = !event.target.checked; });
   documentObject.addEventListener('input', (event) => { if (event.target.matches('#live-look-form [name="caption"]')) el('#caption-count').textContent = `${event.target.value.length}/80`; });
-  documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); if (event.target.id === 'live-look-form') submitLiveLook(event.target); if (event.target.id === 'social-search') searchPeople(event.target); if (event.target.id === 'chat-form') { const input = event.target.elements.message; windowObject.GoHottData.sendMessage(state.activeConversation, input.value).then(() => { input.value = ''; renderSocial('chats'); }).catch((error) => windowObject.alert(error.message)); } });
-  documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#check-in-modal').hidden) closeCheckIn(); if (!el('#live-look-modal').hidden) closeLiveLook(); } });
+  documentObject.addEventListener('submit', (event) => { event.preventDefault(); if (event.target.id === 'auth-form') handleAuthSubmit(event.target); if (event.target.id === 'password-recovery-request-form') requestPasswordRecovery(event.target); if (event.target.id === 'password-recovery-update-form') updateRecoveredPassword(event.target); if (event.target.id === 'profile-form') saveProfile(event.target); if (event.target.id === 'delete-account-form') requestDeletion(event.target); if (event.target.id === 'live-look-form') submitLiveLook(event.target); if (event.target.id === 'social-search') searchPeople(event.target); if (event.target.id === 'chat-form') { const input = event.target.elements.message; windowObject.GoHottData.sendMessage(state.activeConversation, input.value).then(() => { input.value = ''; renderSocial('chats'); }).catch((error) => windowObject.alert(error.message)); } });
+  documentObject.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (!el('#auth-modal').hidden) closeAuth(); if (!el('#password-recovery-modal').hidden) closePasswordRecovery(); if (!el('#delete-account-modal').hidden) closeDeletion(); if (!el('#check-in-modal').hidden) closeCheckIn(); if (!el('#live-look-modal').hidden) closeLiveLook(); } });
   windowObject.addEventListener('hashchange', () => { if (handleDeepLink()) return; const [route, id] = windowObject.location.hash.slice(1).split('/'); if (route === 'venue' && id) { state.currentVenue = venueById(id); if (state.currentVenue) { renderVenueDetail(id); navigate('venue', { skipHash: true }); } } else if (['discover', 'map', 'saved', 'social', 'profile'].includes(route)) navigate(route, { skipHash: true }); });
+  windowObject.addEventListener('gohott:native-link', (event) => handleDeepLink(event.detail?.hash));
 
-  windowObject.GoHottAuth.subscribe(onAuthChanged); windowObject.GoHottAuth.initialise();
+  windowObject.GoHottAuth.subscribe(onAuthChanged); windowObject.GoHottAuth.subscribeToRecovery(onPasswordRecovery); windowObject.GoHottAuth.initialise();
   windowObject.GoHottData.subscribeToCheckIns(loadVenues, (status) => { if (status === 'CHANNEL_ERROR') el('#fresh').textContent = 'Refresh needed'; });
   windowObject.GoHottData.subscribeToLiveLooks(() => loadVenues());
+  windowObject.addEventListener('online', () => loadVenues());
   loadVenues(); renderAuthMode();
   const [initialRoute, initialId] = windowObject.location.hash.slice(1).split('/'); if (initialRoute === 'venue' && initialId) { state.currentVenue = venueById(initialId); } if (!windowObject.GoHottMobile.parseDeepLink()) navigate(['discover', 'map', 'saved', 'social', 'profile'].includes(initialRoute) ? initialRoute : 'discover', { skipHash: true });
   if ('serviceWorker' in navigator) windowObject.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch((error) => console.warn('Service worker registration failed.', error)));
